@@ -5,3 +5,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color:
 #status { font-size: 12px; opacity: 0.7; }
 .attribution { position: absolute; bottom: 4px; right: 8px; font-size: 11px; opacity: 0.8; }
 .attribution a { color: inherit; }
+#speedo { display: flex; align-items: center; gap: 12px; }
+.indicator { font-size: 28px; color: #2a4; opacity: 0.2; }
+.indicator.on { opacity: 1; text-shadow: 0 0 8px #3f6; }
+#gear-row { font-size: 14px; }
+#gear { font-weight: 700; }
+#hud, #help { text-shadow: 0 1px 3px #000; }
+#help { position: absolute; bottom: 8px; left: 12px; font-size: 12px; opacity: 0.85; line-height: 1.5; }
+#bump { position: absolute; top: 40%; left: 50%; transform: translateX(-50%); font-size: 28px; font-weight: 700; color: #f44; text-shadow: 0 1px 4px #000; }
+#paused { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(0, 0, 0, 0.5); font-size: 48px; font-weight: 700; }
+#paused small { font-size: 16px; font-weight: 400; }
+[hidden] { display: none !important; }
