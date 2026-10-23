@@ -10,6 +10,7 @@ Solo hackathon build: a browser driving sim of the roads around Wanstead test ce
 - Before calling it done, run `/code-review` for a fresh look, then commit.
 - If Claude gets the same thing wrong twice, `/clear` and start again with a clearer request.
 - At the start of a session, if I jump straight into a feature, remind me of this list in one line.
+- At the end of a session (feature committed), tell me to `/clear` and name the next feature from the table below, with its `/rename` name.
 - Speak simply and avoid jargon.
 
 ## Features (one session each, in order)
