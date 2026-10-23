@@ -23,7 +23,7 @@ export interface Saved {
 type Job =
   | { kind: 'start'; body: SessionStart }
   | { kind: 'events'; events: FaultEvent[] }
-  | { kind: 'end'; sessionId: string; endedAt: string };
+  | { kind: 'end'; sessionId: string; endedAt: string; abandoned: boolean };
 
 export const SEND_EVERY_MS = 1000;
 /** The server takes up to 500 per batch. */
@@ -38,7 +38,8 @@ export class Sync {
   private faults: FaultEvent[] = [];
   /** Sessions the server refused to start: anything more for them is ignored. */
   private dropped = new Set<string>();
-  private busy = false;
+  /** The send under way, if any. */
+  private flushing: Promise<void> | null = null;
   private timer = 0;
   state: SyncState = 'idle';
   /** A session's end was saved; the result is the server's own count. */
@@ -66,10 +67,11 @@ export class Sync {
     if (!this.dropped.has(event.sessionId)) this.faults.push(event);
   }
 
-  endSession(sessionId: string, endedAt: string) {
+  /** `abandoned`: reset part-way, so the server keeps the faults but writes no examiner's summary. */
+  endSession(sessionId: string, endedAt: string, abandoned = false) {
     if (this.dropped.has(sessionId)) return;
     this.batchFaults();
-    this.jobs.push({ kind: 'end', sessionId, endedAt });
+    this.jobs.push({ kind: 'end', sessionId, endedAt, abandoned });
   }
 
   /** True while anything for `sessionId` is still waiting to be sent. */
@@ -82,35 +84,34 @@ export class Sync {
     );
   }
 
-  /** Sends what's queued, in order, stopping at the first call that should be tried again. */
-  async flush() {
-    if (this.busy) return;
-    this.busy = true;
+  /** Sends what's queued, in order, stopping at the first call that should be tried again. If a send is already under way, waits for that one. */
+  flush(): Promise<void> {
+    this.flushing ??= this.sendQueued().finally(() => (this.flushing = null));
+    return this.flushing;
+  }
+
+  private async sendQueued() {
     this.batchFaults();
-    try {
-      while (this.jobs.length) {
-        if (this.state !== 'offline') this.setState('sending');
-        const job = this.jobs[0];
-        const res = await this.post(job).catch(() => null);
-        if (!res || res.status >= 500 || RETRY.has(res.status)) {
-          this.setState('offline');
-          return;
-        }
-        this.jobs.shift();
-        if (!res.ok) {
-          console.error(`[sync] server refused ${job.kind} (${res.status}); dropped`, job, await res.text().catch(() => ''));
-          if (job.kind === 'start') this.dropSession(job.body.sessionId);
-          else if (job.kind === 'end') this.onFailed?.(job.sessionId);
-        } else if (job.kind === 'end') {
-          const saved = await res.json().catch(() => null);
-          if (saved) this.onSaved?.(saved);
-          else this.onFailed?.(job.sessionId);
-        }
+    while (this.jobs.length) {
+      if (this.state !== 'offline') this.setState('sending');
+      const job = this.jobs[0];
+      const res = await this.post(job).catch(() => null);
+      if (!res || res.status >= 500 || RETRY.has(res.status)) {
+        this.setState('offline');
+        return;
       }
-      this.setState('idle');
-    } finally {
-      this.busy = false;
+      this.jobs.shift();
+      if (!res.ok) {
+        console.error(`[sync] server refused ${job.kind} (${res.status}); dropped`, job, await res.text().catch(() => ''));
+        if (job.kind === 'start') this.dropSession(job.body.sessionId);
+        else if (job.kind === 'end') this.onFailed?.(job.sessionId);
+      } else if (job.kind === 'end') {
+        const saved = await res.json().catch(() => null);
+        if (saved) this.onSaved?.(saved);
+        else this.onFailed?.(job.sessionId);
+      }
     }
+    this.setState('idle');
   }
 
   /** Without its session the server would refuse the rest as unknown, holding up the queue for good. */
@@ -136,7 +137,7 @@ export class Sync {
         ? ['/api/sessions', job.body]
         : job.kind === 'events'
           ? ['/api/events', { events: job.events }]
-          : [`/api/sessions/${encodeURIComponent(job.sessionId)}/end`, { endedAt: job.endedAt }];
+          : [`/api/sessions/${encodeURIComponent(job.sessionId)}/end`, { endedAt: job.endedAt, ...(job.abandoned ? { abandoned: true } : {}) }];
     return this.send(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   }
 

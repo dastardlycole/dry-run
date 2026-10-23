@@ -13,8 +13,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color:
 #hud, #help { text-shadow: 0 1px 3px #000; }
 #help { position: absolute; bottom: 8px; left: 12px; font-size: 12px; opacity: 0.85; line-height: 1.5; }
 #bump { position: absolute; top: 40%; left: 50%; transform: translateX(-50%); font-size: 28px; font-weight: 700; color: #f44; text-shadow: 0 1px 4px #000; }
-#paused { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(0, 0, 0, 0.5); font-size: 48px; font-weight: 700; }
-#paused small { font-size: 16px; font-weight: 400; }
+#paused { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px 16px; box-sizing: border-box; overflow: auto; background: rgba(0, 0, 0, 0.6); }
+#paused .title { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 40px; font-weight: 700; }
+#paused .title small { font-size: 15px; font-weight: 400; opacity: 0.8; }
+#pause-card { width: min(760px, 100%); }
 #faults { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
 .fault { padding: 6px 14px; border-radius: 6px; font-size: 16px; font-weight: 600; color: #111; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4); }
 .fault.driving { background: #ffd24a; }
@@ -22,24 +24,43 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color:
 .fault.dangerous { background: #ff4a4a; color: #fff; }
 #caption { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); max-width: min(720px, calc(100% - 32px)); padding: 8px 16px; border-radius: 6px; background: rgba(0, 0, 0, 0.65); font-size: 18px; text-align: center; }
 #result { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.6); }
-#result .card { width: min(760px, 100%); max-height: 100%; overflow: auto; padding: 20px 24px; border-radius: 10px; background: #1b1f24; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); }
+:is(#result, #pause-card) .card { width: min(760px, 100%); box-sizing: border-box; max-height: 100%; overflow: auto; padding: 20px 24px; border-radius: 10px; background: #1b1f24; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); }
 #result h1 { margin: 0 0 12px; font-size: 44px; letter-spacing: 0.04em; text-transform: uppercase; }
 #result h1.pass { color: #4ad66d; }
 #result h1.fail { color: #ff5a5a; }
-#result .counts { display: flex; gap: 10px; margin-bottom: 16px; }
-#result .count { flex: 1; padding: 8px 12px; border-radius: 6px; background: #262c33; border-left: 5px solid; display: flex; align-items: baseline; gap: 8px; }
-#result .count b { font-size: 26px; }
-#result .count.driving { border-color: #ffd24a; }
-#result .count.serious { border-color: #ff8a3d; }
-#result .count.dangerous { border-color: #ff4a4a; }
+:is(#result, #pause-card) .counts { display: flex; gap: 10px; margin-bottom: 16px; }
+:is(#result, #pause-card) .count { flex: 1; padding: 8px 12px; border-radius: 6px; background: #262c33; border-left: 5px solid; display: flex; align-items: baseline; gap: 8px; }
+:is(#result, #pause-card) .count b { font-size: 26px; }
+:is(#result, #pause-card) .count.driving { border-color: #ffd24a; }
+:is(#result, #pause-card) .count.serious { border-color: #ff8a3d; }
+:is(#result, #pause-card) .count.dangerous { border-color: #ff4a4a; }
 #result .body { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
-#result .list { flex: 1 1 300px; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
-#result .list li { display: flex; gap: 10px; align-items: baseline; padding: 6px 8px; border-radius: 6px; background: #262c33; }
-#result .list .n { min-width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #111; background: #ffd24a; }
-#result .list .serious .n { background: #ff8a3d; }
-#result .list .dangerous .n { background: #ff4a4a; color: #fff; }
-#result .list .time { opacity: 0.6; font-variant-numeric: tabular-nums; }
-#result .list .none { opacity: 0.8; }
+:is(#result, #pause-card) .list { flex: 1 1 300px; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+:is(#result, #pause-card) .list li { display: flex; gap: 10px; align-items: baseline; padding: 6px 8px; border-radius: 6px; background: #262c33; flex-wrap: wrap; }
+:is(#result, #pause-card) .debrief { flex: 1 0 100%; box-sizing: border-box; padding: 2px 0 2px 30px; font-size: 13px; line-height: 1.45; }
+:is(#result, #pause-card) .debrief p { margin: 4px 0 0; }
+:is(#result, #pause-card) .debrief.waiting { opacity: 0.55; font-style: italic; }
+:is(#result, #pause-card) .debrief .none { opacity: 0.6; }
+:is(#result, #pause-card) .cites { display: flex; flex-wrap: wrap; gap: 6px; }
+:is(#result, #pause-card) .cite { padding: 1px 8px; border-radius: 10px; background: #33404c; color: #9fd0ff; font-size: 12px; text-decoration: none; }
+:is(#result, #pause-card) .cite:hover { background: #3f5060; text-decoration: underline; }
+:is(#result, #pause-card) .debrief .facts { opacity: 0.65; font-size: 12px; }
+:is(#result, #pause-card) .summary { margin: 0 0 14px; padding: 10px 14px; border-radius: 6px; background: #22303a; border-left: 4px solid #9fd0ff; }
+:is(#result, #pause-card) .summary h2 { margin: 0 0 4px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.75; }
+:is(#result, #pause-card) .summary .why { margin: 0; font-size: 15px; line-height: 1.45; }
+:is(#result, #pause-card) .summary .cites { margin: 6px 0 0; }
+#pause-card .stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+#pause-card .stat { flex: 1 1 110px; padding: 8px 12px; border-radius: 6px; background: #262c33; display: flex; align-items: baseline; gap: 8px; }
+#pause-card .stat b { font-size: 24px; font-variant-numeric: tabular-nums; }
+#pause-card .stat span { opacity: 0.75; font-size: 13px; }
+#pause-card .course.pass b { color: #4ad66d; }
+#pause-card .course.fail b { color: #ff5a5a; }
+:is(#result, #pause-card) .debrief-note { margin: 12px 0 0; font-size: 13px; opacity: 0.75; }
+:is(#result, #pause-card) .list .n { min-width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #111; background: #ffd24a; }
+:is(#result, #pause-card) .list .serious .n { background: #ff8a3d; }
+:is(#result, #pause-card) .list .dangerous .n { background: #ff4a4a; color: #fff; }
+:is(#result, #pause-card) .list .time { opacity: 0.6; font-variant-numeric: tabular-nums; }
+:is(#result, #pause-card) .list .none { opacity: 0.8; }
 #result .minimap { flex: none; border-radius: 6px; }
 #result .save { margin: 14px 0 0; font-size: 13px; opacity: 0.7; }
 #result .keys { margin: 4px 0 0; font-size: 13px; opacity: 0.7; }

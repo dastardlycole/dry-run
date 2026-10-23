@@ -9,7 +9,7 @@ Run from the repo root with `npx tsx tools/src/<script>.ts`. Raw inputs go in `t
 | `route-build` | `/assets/wanstead/world.json` + `src/routes/wanstead-demo.ts` | `/assets/wanstead/route-demo.json` (path, driving line, steps for directions, stop/give-way lines, parked cars) | §4.4 |
 | `import-stats19` | `tools/data/stats19/*.csv` + `/assets/wanstead/world.json` + `route-*.json` | `collisions` + `junctions` collections (safe to re-run) | §7, §10 |
 | `stream` | `src/stream/junction-stats.ts` | Atlas Stream Processor `junctionStats`: `fault_events` → `junction_stats` | §8 |
-| `ingest-guidance` | DVSA + Highway Code pages | `guidance_chunks`, `tell_me_questions` | §4.7 |
+| `ingest-guidance` | gov.uk Highway Code + DVSA pages (list in `src/guidance/sources.ts`) | `/assets/guidance/chunks.json`; with `--push`, `guidance_chunks` + the `guidance_vector` Automated Embedding index | §4.7 |
 | `gen-tts` | examiner phrase list | `/assets/audio/*.wav` | §4.5 |
 | `seed-demo` | — | synthetic `sessions` + `fault_events` | §4.10 |
 
@@ -39,3 +39,15 @@ npm run stream -w tools               # drop (if there), create and start juncti
 npm run stream -w tools -- stats      # check it's running
 npm run stream -w tools -- backfill   # rebuild junction_stats from all saved faults (faults saved while the processor was off)
 ```
+
+## Debrief guidance (RAG)
+
+The debrief cites Highway Code rules and the DVSA marking page (Open Government Licence v3). Which rule backs up which fault is set by hand in `src/guidance/sources.ts`.
+
+```
+npm run ingest-guidance -w tools              # download the pages (once) and write assets/guidance/chunks.json
+npm run ingest-guidance -w tools -- --push    # upsert into guidance_chunks, create the autoEmbed (voyage-4) index, run a test search
+```
+
+Add `--fetch` to download the pages again. Atlas embeds the text itself, so no embedding key is needed here.
+

@@ -131,4 +131,28 @@ describe('Sync', () => {
     await sync.flush();
     expect(server.calls.map((c) => c.body.events[0]._id)).toEqual(['s:2']);
   });
+
+  it('a second flush while one is sending waits for it, instead of returning early', async () => {
+    const server = fakeServer();
+    const sync = new Sync(server.fetch);
+    sync.startSession(start);
+    sync.addFault(fault(1));
+    const first = sync.flush();
+    const second = sync.flush();
+    expect(second).toBe(first);
+    await second;
+    expect(server.calls.map((c) => c.url)).toEqual(['/api/sessions', '/api/events']);
+  });
+
+  it('an abandoned end (reset part-way) says so; a normal end does not', async () => {
+    const server = fakeServer();
+    const sync = new Sync(server.fetch);
+    sync.endSession('s', '2026-10-24T10:05:00.000Z', true);
+    sync.endSession('t', '2026-10-24T10:06:00.000Z');
+    await sync.flush();
+    expect(server.calls.map((c) => c.body)).toEqual([
+      { endedAt: '2026-10-24T10:05:00.000Z', abandoned: true },
+      { endedAt: '2026-10-24T10:06:00.000Z' },
+    ]);
+  });
 });

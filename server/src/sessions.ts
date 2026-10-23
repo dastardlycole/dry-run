@@ -14,11 +14,13 @@ export interface SessionDoc {
   routeId: string;
   startedAt: Date;
   endedAt?: Date;
+  /** Reset part-way (R): the faults so far are kept, but it isn't a finished test. */
+  abandoned?: boolean;
   result?: 'PASS' | 'FAIL';
   counts?: { driving: number; serious: number; dangerous: number };
 }
 
-type FaultEventDoc = Omit<FaultEvent, 'ts'> & { ts: Date };
+export type FaultEventDoc = Omit<FaultEvent, 'ts'> & { ts: Date };
 
 export const MAX_EVENTS_PER_BATCH = 500;
 export const RULE_IDS = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R9', 'R11'];
@@ -79,7 +81,7 @@ const endBody = {
   type: 'object',
   required: ['endedAt'],
   additionalProperties: false,
-  properties: { endedAt: time },
+  properties: { endedAt: time, abandoned: { type: 'boolean' } },
 };
 
 /** The fault_events indexes from SPEC §7. Safe to run on every start. */
@@ -91,7 +93,13 @@ export async function ensureIndexes(db: Db) {
   ]);
 }
 
-export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>) {
+/** Told when faults are saved and when a test ends, so the debrief can be written in the background. */
+export interface SessionHooks {
+  faultsSaved?: (events: FaultEventDoc[]) => void;
+  sessionEnded?: (sessionId: string) => void;
+}
+
+export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>, hooks: SessionHooks = {}) {
   const sessions = async () => (await getDb()).collection<SessionDoc>('sessions');
   const events = async () => (await getDb()).collection<FaultEventDoc>('fault_events');
 
@@ -135,10 +143,11 @@ export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>) {
       if (errors.some((w) => w.code !== 11000)) throw err;
       duplicates = errors.length;
     }
+    hooks.faultsSaved?.(docs);
     return { inserted: docs.length - duplicates, duplicates };
   });
 
-  app.post<{ Params: { id: string }; Body: { endedAt: string } }>(
+  app.post<{ Params: { id: string }; Body: { endedAt: string; abandoned?: boolean } }>(
     '/api/sessions/:id/end',
     { schema: { body: endBody, params: { type: 'object', properties: { id } } } },
     async (req, reply) => {
@@ -148,7 +157,13 @@ export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>) {
       const saved = await (await events()).find({ sessionId }, { projection: { category: 1 } }).toArray();
       const counts = countFaults(saved);
       const result = resultOf(counts);
-      await col.updateOne({ _id: sessionId }, { $set: { endedAt: new Date(req.body.endedAt), result, counts } });
+      const abandoned = req.body.abandoned === true;
+      await col.updateOne(
+        { _id: sessionId },
+        { $set: { endedAt: new Date(req.body.endedAt), result, counts, ...(abandoned ? { abandoned } : {}) } },
+      );
+      // No examiner's summary for a test the learner gave up on.
+      if (!abandoned) hooks.sessionEnded?.(sessionId);
       return { sessionId, result, counts };
     },
   );

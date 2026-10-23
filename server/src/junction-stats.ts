@@ -14,7 +14,7 @@ interface StatDoc {
   lastUpdated?: Date;
 }
 
-interface JunctionDoc {
+export interface JunctionDoc {
   _id: string;
   type: string;
   name: string;
@@ -32,6 +32,32 @@ const query = {
   },
 };
 
+/** For each junction, how many sessions got at least one fault there (of those matching `match`). */
+export async function sessionsWithFault(db: Db, match: Record<string, unknown>): Promise<Map<string, number>> {
+  const rows = await db
+    .collection('fault_events')
+    .aggregate<{ _id: string; n: number }>([
+      { $match: match },
+      { $group: { _id: { j: '$junctionId', s: '$sessionId' } } },
+      { $group: { _id: '$_id.j', n: { $sum: 1 } } },
+    ])
+    .toArray();
+  return new Map(rows.map((x) => [x._id, x.n]));
+}
+
+/** How many sessions there have been on each route at a centre. */
+export async function sessionsPerRoute(db: Db, centreId: string): Promise<Map<string, number>> {
+  const rows = await db
+    .collection('sessions')
+    .aggregate<{ _id: string; n: number }>([{ $match: { centreId } }, { $group: { _id: '$routeId', n: { $sum: 1 } } }])
+    .toArray();
+  return new Map(rows.map((x) => [x._id, x.n]));
+}
+
+/** Sessions that drove through a junction: the sessions on every route that passes it. */
+export const sessionsThrough = (routeIds: string[] | undefined, perRoute: Map<string, number>) =>
+  (routeIds ?? []).reduce((n, r) => n + (perRoute.get(r) ?? 0), 0);
+
 export function junctionStatsRoutes(app: FastifyInstance, getDb: () => Promise<Db>) {
   app.get<{ Querystring: { ruleId?: string; category?: string } }>(
     '/api/junctions/stats',
@@ -46,21 +72,11 @@ export function junctionStatsRoutes(app: FastifyInstance, getDb: () => Promise<D
       if (ruleId) statFilter['_id.ruleId'] = eventFilter.ruleId = ruleId;
       if (category) statFilter['_id.category'] = eventFilter.category = category;
 
-      const [stats, latest, faultedSessions, routeSessions, collisions] = await Promise.all([
+      const [stats, latest, withFault, perRoute, collisions] = await Promise.all([
         db.collection<StatDoc>('junction_stats').find(statFilter).toArray(),
         db.collection<StatDoc>('junction_stats').find({ '_id.centreId': centreId }).sort({ lastUpdated: -1 }).limit(1).toArray(),
-        db
-          .collection('fault_events')
-          .aggregate<{ _id: string; n: number }>([
-            { $match: eventFilter },
-            { $group: { _id: { j: '$junctionId', s: '$sessionId' } } },
-            { $group: { _id: '$_id.j', n: { $sum: 1 } } },
-          ])
-          .toArray(),
-        db
-          .collection('sessions')
-          .aggregate<{ _id: string; n: number }>([{ $match: { centreId } }, { $group: { _id: '$routeId', n: { $sum: 1 } } }])
-          .toArray(),
+        sessionsWithFault(db, eventFilter),
+        sessionsPerRoute(db, centreId),
         db
           .collection<{ _id: string; date: Date; severity: Severity; location: { coordinates: [number, number] } }>('collisions')
           .find({ centreId }, { projection: { date: 1, severity: 1, location: 1 } })
@@ -74,8 +90,6 @@ export function junctionStatsRoutes(app: FastifyInstance, getDb: () => Promise<D
         f.byRule[s._id.ruleId] = (f.byRule[s._id.ruleId] ?? 0) + s.faults;
         faults.set(s._id.junctionId, f);
       }
-      const withFault = new Map(faultedSessions.map((x) => [x._id, x.n]));
-      const perRoute = new Map(routeSessions.map((x) => [x._id, x.n]));
 
       const junctionDocs = await db
         .collection<JunctionDoc>('junctions')
@@ -93,7 +107,7 @@ export function junctionStatsRoutes(app: FastifyInstance, getDb: () => Promise<D
           lat: j.location.coordinates[1],
           faults: f?.faults ?? 0,
           byRule: f?.byRule ?? {},
-          sessionsThrough: (j.routeIds ?? []).reduce((n, r) => n + (perRoute.get(r) ?? 0), 0),
+          sessionsThrough: sessionsThrough(j.routeIds, perRoute),
           sessionsWithFault: withFault.get(j._id) ?? 0,
           collisions: {
             total: c?.total ?? 0,

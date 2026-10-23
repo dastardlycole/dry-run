@@ -1,36 +1,24 @@
 import type { Counts, Result } from '../faults/result';
-import { RULE_NAMES, type Category, type RuleId } from '../faults/types';
+import type { Category } from '../faults/types';
 import type { Vec2 } from '../world/types';
+import { DebriefView, el, type ResultFault } from './fault-list';
+
+export type { ResultFault } from './fault-list';
 
 // The end-of-test screen (SPEC §4.7 FR-D1): result, counts by category, faults in time order and a
 // mini-map with a pin for each. Drawn straight away from the faults the sim found; saving to the
-// server happens behind it and only changes the line at the bottom.
-
-export interface ResultFault {
-  ruleId: RuleId;
-  category: Category;
-  /** Sim seconds from the start of the drive. */
-  t: number;
-  pos: Vec2;
-  /** Where it happened, in words. */
-  place: string;
-}
+// server happens behind it and only changes the line at the bottom. Once it's saved, the examiner's debrief
+// (SPEC §4.7 FR-D2–D4) fills in: mostly written already in the background during the drive, plus the
+// examiner's summary of the whole test at the top.
 
 const PIN: Record<Category, string> = { driving: '#ffd24a', serious: '#ff8a3d', dangerous: '#ff4a4a' };
 const MAP_PX = 280;
 
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') => {
-  const e = document.createElement(tag);
-  if (className) e.className = className;
-  if (text) e.textContent = text;
-  return e;
-};
-
-const clock = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
-
 export class ResultScreen {
   private root = document.getElementById('result')!;
   private save = el('p', 'save');
+  /** The faults and their debrief on screen now, or null. */
+  debrief: DebriefView | null = null;
 
   constructor(private routeLine: Vec2[]) {}
 
@@ -50,19 +38,10 @@ export class ResultScreen {
     }
     card.append(tally);
 
+    this.debrief = new DebriefView(faults, 'No faults. Well driven.');
     const body = el('div', 'body');
-    const list = el('ol', 'list');
-    if (faults.length === 0) list.append(el('li', 'none', 'No faults. Well driven.'));
-    faults.forEach((f, i) => {
-      const li = el('li', f.category);
-      li.append(el('span', 'n', String(i + 1)), el('span', 'time', clock(f.t)));
-      const what = el('span', 'what');
-      what.append(el('b', '', RULE_NAMES[f.ruleId]), document.createTextNode(` · ${f.category} · ${f.place}`));
-      li.append(what);
-      list.append(li);
-    });
-    body.append(list, this.miniMap(faults));
-    card.append(body, this.save, el('p', 'keys', 'Press R to drive again'));
+    body.append(this.debrief.list, this.miniMap(faults));
+    card.append(this.debrief.summary, body, this.debrief.note, this.save, el('p', 'keys', 'Press R to drive again'));
     this.root.replaceChildren(card);
     this.root.hidden = false;
   }
@@ -75,6 +54,7 @@ export class ResultScreen {
   hide() {
     this.root.hidden = true;
     this.root.replaceChildren();
+    this.debrief = null;
   }
 
   /** The route from above (north up) with a numbered pin per fault. */

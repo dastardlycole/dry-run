@@ -9,6 +9,7 @@ import { FaultEngine, toFaultEvent, type SessionInfo } from '../faults/engine';
 import { speedLimitAt } from '../faults/limits';
 import { countFaults, resultOf } from '../faults/result';
 import { RULE_NAMES, type Contact, type Fault, type Frame } from '../faults/types';
+import { streamDebrief } from '../net/debrief';
 import { Sync } from '../net/sync';
 import { GuideArrows, LightHeads, loadRoute, routeLinesMesh } from '../world/furniture';
 import { buildSiteLights, signalSites, TrafficLights } from '../world/lights';
@@ -23,6 +24,8 @@ import { MPH_PER_MS, toggleIndicator, type Indicator } from './controls';
 import { Hud } from './hud';
 import { Input } from './input';
 import { placeOf } from './place';
+import type { DebriefView } from './fault-list';
+import { PauseScreen } from './pause-screen';
 import { ResultScreen, type ResultFault } from './result-screen';
 
 // The drivable car in the OSM world around the test centre (SPEC §4.1, §4.2).
@@ -122,6 +125,7 @@ const toLatLng = makeProjection(CENTRE.lat, CENTRE.lng).toLatLng;
 const sync = new Sync();
 sync.start();
 const resultScreen = new ResultScreen(route?.line ?? []);
+const pauseScreen = new PauseScreen();
 /** One per browser, kept between visits. There are no accounts. */
 const learnerId = (() => {
   const KEY = 'dryrun.learnerId';
@@ -137,8 +141,14 @@ const learnerId = (() => {
 let session: SessionInfo | null = null;
 let ended = false;
 let faultCount = 0;
-/** This test's faults, for the result screen. */
-let found: { fault: Fault; place: string }[] = [];
+/** This test's faults, for the pause and result screens. */
+let found: { id: string; fault: Fault; place: string }[] = [];
+const foundRows = (): ResultFault[] => found.map(({ id, fault: f, place }) => ({ ...f, id, place }));
+/** How many times, and how far apart, to ask again for explanations that weren't ready. */
+const NOT_READY_RETRIES = 2;
+const NOT_READY_RETRY_MS = 5000;
+/** Stops the debrief stream on screen (unpaused, R pressed, or a new test). */
+let debriefAbort: AbortController | null = null;
 const contacts = new Contacts();
 
 function openSession() {
@@ -159,10 +169,10 @@ function openSession() {
 function endDrive() {
   if (!session || ended) return;
   ended = true;
+  if (paused) setPaused(false);
   voice.stop();
   const counts = countFaults(found.map((f) => f.fault));
-  const rows: ResultFault[] = found.map(({ fault: f, place }) => ({ ...f, place }));
-  resultScreen.show(resultOf(counts), counts, rows);
+  resultScreen.show(resultOf(counts), counts, foundRows());
   sync.endSession(session.sessionId, new Date().toISOString());
   showSaveState();
 }
@@ -176,7 +186,68 @@ sync.onState = showSaveState;
 sync.onSaved = (saved) => {
   if (session?.sessionId !== saved.sessionId || !resultScreen.visible) return;
   resultScreen.setSave(`Saved to Atlas · server result ${saved.result} · session ${saved.sessionId.slice(0, 8)}`);
+  showDebrief(saved.sessionId);
 };
+
+/** The examiner's debrief, asked for once the server has the whole test. The result screen is already up. */
+function showDebrief(sessionId: string) {
+  if (found.length && resultScreen.debrief) streamDebriefInto(resultScreen.debrief, sessionId);
+}
+
+/**
+ * Streams the debrief into the pause or result screen, stopping any earlier stream. Most of it is already
+ * written: the server explains each fault in the background as soon as it's saved. `first` runs before asking.
+ */
+function streamDebriefInto(view: DebriefView, sessionId: string, first?: () => Promise<void>) {
+  debriefAbort?.abort();
+  const abort = (debriefAbort = new AbortController());
+  view.started();
+  void (async () => {
+    await first?.();
+    // Explanations that failed for a passing reason (timeout, say) are asked for again, a couple of times.
+    for (let round = 0; round <= NOT_READY_RETRIES && !abort.signal.aborted; round++) {
+      if (round) await new Promise((r) => setTimeout(r, NOT_READY_RETRY_MS));
+      if (abort.signal.aborted) return;
+      let unavailable = false;
+      const ok = await streamDebrief(
+        sessionId,
+        (line) => {
+          if (line.kind === 'done') unavailable = line.unavailable;
+          else view.set(line);
+        },
+        abort.signal,
+      );
+      if (abort.signal.aborted) return;
+      view.ended(ok, unavailable);
+      if (!ok || unavailable || !view.hasNotReady) return;
+    }
+  })();
+}
+
+function stopDebrief() {
+  debriefAbort?.abort();
+  debriefAbort = null;
+}
+
+/** Sends what's queued for the test now, so the pause screen asks about every fault. Offline, it gives up at once. */
+async function sendNow(sessionId: string) {
+  await sync.flush();
+  // A send that was already under way may have started before the last faults were queued.
+  if (sync.pendingFor(sessionId) && sync.state !== 'offline') await sync.flush();
+}
+
+/** Pausing shows the test so far: stats, and the faults with whatever of the debrief is ready. */
+function setPaused(on: boolean) {
+  paused = on;
+  if (!on) {
+    pauseScreen.hide();
+    stopDebrief();
+    return;
+  }
+  pauseScreen.show(simTime, countFaults(found.map((f) => f.fault)), foundRows());
+  const s = session;
+  if (s && found.length && pauseScreen.debrief) streamDebriefInto(pauseScreen.debrief, s.sessionId, () => sendNow(s.sessionId));
+}
 sync.onFailed = (id) => {
   if (session?.sessionId === id && resultScreen.visible) resultScreen.setSave("Couldn't save this test: the server refused it.");
 };
@@ -211,7 +282,10 @@ renderer.setAnimationLoop((now: number) => {
   last = now;
 
   for (const action of input.takeActions()) {
-    if (action === 'pause') paused = !paused;
+    // The result screen is its own pause.
+    if (action === 'pause') {
+      if (!resultScreen.visible) setPaused(!paused);
+    }
     else if (action === 'camera') cameras.toggle();
     else if (action === 'guide') {
       if (guide) guide.mesh.visible = !guide.mesh.visible;
@@ -227,14 +301,17 @@ renderer.setAnimationLoop((now: number) => {
       voice.stop();
       hud.clearFaults();
       resultScreen.hide();
+      stopDebrief();
       // An unfinished test is saved as ended here, with the faults so far. A new one starts on the next frame.
-      if (session && !ended) sync.endSession(session.sessionId, new Date().toISOString());
+      if (session && !ended) sync.endSession(session.sessionId, new Date().toISOString(), true);
       session = null;
       ended = false;
       faultCount = 0;
       found = [];
       contacts.clear();
       trace.length = 0;
+      // Reset while paused: the pause screen starts afresh too.
+      if (paused) setPaused(true);
     } else if (!paused) indicator = toggleIndicator(indicator, action === 'indicateLeft' ? 'left' : 'right');
   }
 
@@ -287,7 +364,7 @@ renderer.setAnimationLoop((now: number) => {
         const event = toFaultEvent(f, ++faultCount, session!, toLatLng);
         console.log(`[fault] ${f.ruleId} ${RULE_NAMES[f.ruleId]} (${f.category})`, event);
         hud.flashFault(`${f.ruleId} · ${RULE_NAMES[f.ruleId]}`, f.category);
-        found.push({ fault: f, place: placeOf(f, route!.steps, worldData.roads) });
+        found.push({ id: event._id, fault: f, place: placeOf(f, route!.steps, worldData.roads) });
         sync.addFault(event);
       }
       if (pullUp!.update(simTime, m, car.speedMph, director!.finished)) endDrive();
