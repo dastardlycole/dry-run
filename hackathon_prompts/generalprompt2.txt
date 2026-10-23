@@ -1,0 +1,28 @@
+Agents That Ship
+Encode Club logo
+Supported by Encode Club
+Build an AI agent that does a real job end to end, not just a chatbot.
+
+Pick a task someone does today by hand, in a spreadsheet or across ten browser tabs, and build an agent that sees it through: it gathers what it needs, uses real tools, makes decisions, recovers when something goes wrong and delivers a finished result. A person should stay in control where it matters, approving the risky steps rather than doing the work.
+
+What to build
+Any domain is welcome. Some ideas to get you started:
+
+Small-business operations: chase unpaid invoices, reconcile payments, reorder stock or book suppliers.
+Recruiting: screen applications against a brief, shortlist candidates and schedule interviews.
+Research: produce a sourced brief, competitor report or due-diligence pack, checking its own claims before it hands anything over.
+Event running: find a venue, set up the event page, manage sign-ups and send reminders and follow-ups.
+Developer: take an issue, write the fix, run the tests and open a pull request ready for review.
+Personal admin: renewals, refunds, complaints, forms and appointments.
+Agents that work together: agents that hand tasks to each other, or pay and get paid for work, for example with stablecoins.
+Judging criteria
+Does the job: it completes a real task from start to finish with minimal hand-holding.
+Reliability: it handles errors and edge cases, and knows when to stop and ask a human.
+Usefulness: someone would actually use it, or pay for it.
+Technical depth: good use of tools, memory, planning and evaluation.
+Safety and control: sensible permissions, approval steps for risky actions and a clear record of what the agent did.
+Submission requirements
+A working demo of the agent completing its task from start to finish, live or recorded.
+A code repository with a README and setup instructions.
+A 2–4-minute demo video.
+A short description of the agent's tools, the steps it takes and where a human approves.

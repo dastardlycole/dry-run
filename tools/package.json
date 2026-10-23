@@ -1,0 +1,17 @@
+{
+  "name": "@dry-run/tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@turf/turf": "^7.4.0",
+    "dotenv": "^18.0.9",
+    "mongodb": "^7.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15"
+  }
+}

@@ -1,0 +1,34 @@
+We're looking for the coolest thing built with a Saint AI agent. Saint is an AI colleague that works inside real email, calendars, documents, browsers and terminals. You give it a job in plain English and it gets on with it, then tells you what it did and asks before anything risky.
+
+Teams going for this bounty get their own Saint AI agent for the whole hackathon. Only 10 teams get one, set up on Saturday morning, so tell us in the Friday 6pm check-in if you're in. Only sign up if you're serious about building with it.
+
+What we've already rigged up at the Encode Hub
+Hub radio: Saint runs the Hub's Sonos and writes songs about our members.
+Snack restocks: it's connected to Amazon and Costco and orders snacks and supplies based on the Hub's inventory.
+The front door: it opens the Hub door from a WhatsApp chat.
+That's the bar. Go weirder, more useful, or both.
+
+Your challenge: pick one
+Reverse-engineer something cool: hook Saint up to a device, app or system that was never meant to have an AI agent, and make it do something useful.
+Build something super cool with Saint: a system that helps run the Hub (or any space, team or community), or a tool that makes Saint more powerful.
+Dream up a business: come up with a cool business idea and show how Saint runs or grows it, with Saint actually doing the work in your demo.
+Ideas to steal
+A Hub concierge that books meeting rooms, greets visitors and lets guests in.
+Lights, heating or screens that react to who's in the building and what's on.
+An events agent that plans a meetup, sends the invites, orders the food and chases the RSVPs.
+A Saint that runs a small business's back office: invoices, stock, suppliers and customer replies.
+Plugging Saint into a smart device, a game or an old piece of hardware nobody thought could talk to an AI.
+What we're looking for
+Cool factor: would people crowd round to watch it?
+Working proof: Saint actually doing the job in your demo, live or recorded, with the before and the after.
+Real-world use: would this still be running on Monday?
+Human control: what Saint does on its own, and where it stops and asks first.
+Prize
+£200 in cash for the winning team, one prize rather than a pool.
+A Saint each for the members of the winning team.
+3 months of Saint, free, for the team to keep using.
+The winning team also gets a set-up call to get their Saints running.
+
+Submission requirements
+A 2–4-minute demo of Saint doing the thing, end to end.
+A short note on what you asked it to do, and which tools, devices and accounts it used.

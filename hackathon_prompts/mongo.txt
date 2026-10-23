@@ -1,0 +1,39 @@
+Modern applications require a database that can adapt as quickly as developers can build. As a general-purpose developer data platform, MongoDB Atlas lets you focus on building features, not managing data. It powers a vast range of applications, from simple web apps to complex, real-time AI solutions, by providing a single, unified developer experience for any data requirement.
+
+Your challenge
+Build an innovative application that solves a real-world problem, using MongoDB Atlas as its foundational backend data store.
+
+Requirements
+Your application must rely on a MongoDB Atlas database for its core functionality.
+Use at least one of the MongoDB Atlas features below. The more of them you use, the more points you get.
+MongoDB Atlas features
+Atlas Search for text search
+Atlas Vector Search
+Hybrid Search
+Automated Embedding
+Atlas Stream Processing
+Voyage AI by MongoDB models (some of these are already part of Automated Embedding)
+Who it's for
+Skill level: at least beginner level in any backend or full-stack programming language.
+Languages: any of C, C++, C#, Go, Java, Kotlin, Node.js, PHP, Python, Ruby, Rust or Scala.
+AI tools: use any you like.
+Before the hackathon
+Every participant can collect a $100 MongoDB Atlas credit from the MongoDB booth on the ground floor of Encode Hub.
+To save time on the day, sign up to MongoDB Atlas, open your account and prepare a cluster in advance.
+Workshop
+Stop Stitching, Start Building: Simplify Your Data Stack with MongoDB Atlas. MongoDB's workshop is on Friday 23 October at 3:30pm.
+
+In a fast-paced hackathon, every minute counts. Learn how to use MongoDB Atlas as one developer data platform for full-text search, automated embedding, vector search and native reranking, instead of stitching together separate databases, search engines, vector stores and streaming pipelines. You'll leave with practical architecture tips and code patterns to build faster.
+
+Prizes
+To be announced.
+
+Submission requirements
+A GitHub repository.
+A 3-minute demo video showing the app in action and MongoDB in use.
+Helpful links
+MongoDB Documentation: use the "Ask MongoDB AI" feature to learn more about specific features.
+MongoDB AI Integrations and Partners: MongoDB with agent frameworks, AI platforms, ETL pipelines and other tools.
+Build AI Agents with MongoDB
+MongoDB Vector Search Quick Start Tutorial
+Building a startup? Have a look at MongoDB for Startups.

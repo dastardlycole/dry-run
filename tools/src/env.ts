@@ -1,0 +1,7 @@
+import { config } from 'dotenv';
+import { resolve } from 'node:path';
+
+config({ path: resolve(import.meta.dirname, '../../.env') });
+
+export const DATA_DIR = resolve(import.meta.dirname, '../data');
+export const ASSETS_DIR = resolve(import.meta.dirname, '../../assets');

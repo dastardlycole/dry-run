@@ -1,0 +1,38 @@
+The Real World: AI that understands the world around us
+Encode Club logo
+Supported by Encode Club
+Build software that makes sense of the physical world from photos, audio, maps and open data.
+
+Most AI still lives in a chat window. This challenge takes it outside: streets, venues, parks, trails, wildlife, the weather and the air we breathe. Combine vision, audio and language models with maps and public datasets to build something that helps people understand, navigate or look after the world around them.
+
+What to build
+Some ideas to get you started. They're starting points, not tracks:
+
+Accessibility guide: describe a street, station or venue from photos, covering step-free access, entrances, signage, seating and noise, for blind and partially sighted people or wheelchair users.
+"What's happening near me" explorer: pull live open data (transport, events, roadworks, planning applications, weather) into one view of a neighbourhood, and let people ask questions about it in plain English.
+Trip or hike conditions planner: combine forecasts, daylight, terrain, trail reports and transport times to tell someone whether, when and how to go.
+Wildlife and plant ID: identify species from photos or sound recordings (bird song, for example) and log sightings on a shared map.
+City noise or air-quality map: turn public sensor datasets into a street-level map, a daily briefing or a "quietest, cleanest route" planner.
+Report it from a photo: spot potholes, fly-tipping or broken streetlights in a picture and draft the report to the right council team, with the location filled in.
+Sound-aware assistant: alert deaf and hard-of-hearing people to sirens, alarms, doorbells or announcements.
+Label and menu reader: read a menu, shelf or food label from a photo and flag allergens and dietary needs.
+Flood and heat risk checker: explain what an address or route is exposed to, using environmental open data.
+Useful data sources
+Maps and places: OpenStreetMap
+London data: the TfL Unified API and the London Datastore
+Weather: the Met Office and Open-Meteo
+Air quality: Breathe London and the London Air Quality Network
+Flood data: the Environment Agency's flood-monitoring API
+Wildlife records: iNaturalist and GBIF
+You're free to use any other public data, your own photos and recordings, or hardware such as phone sensors and cameras.
+
+Judging criteria
+Real-world usefulness: a clear user and a problem that exists outside the hackathon.
+How well it reads the world: accuracy, and sensible handling of messy inputs such as blurry photos, background noise or gaps in the data.
+Technical execution: a working end-to-end demo that combines AI models with real data.
+Responsibility: respect for privacy (faces, number plates, people's locations), and honesty about uncertainty when the model isn't sure.
+Submission requirements
+A working demo (web, mobile or hardware).
+A code repository with a README and setup instructions.
+A 2–4-minute demo video showing it working on real inputs: photos, recordings or live data.
+A short note on the models and data sources you used.
