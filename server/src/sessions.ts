@@ -21,7 +21,7 @@ export interface SessionDoc {
 type FaultEventDoc = Omit<FaultEvent, 'ts'> & { ts: Date };
 
 export const MAX_EVENTS_PER_BATCH = 500;
-const RULE_IDS = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R9', 'R11'];
+export const RULE_IDS = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R9', 'R11'];
 
 const id = { type: 'string', minLength: 1, maxLength: 100, pattern: '^[A-Za-z0-9_.:-]+$' };
 const time = { type: 'string', format: 'date-time' };

@@ -8,6 +8,24 @@
   </head>
   <body>
     <div id="map"></div>
+    <aside id="panel">
+      <h1>Where learners slip up</h1>
+      <label>Rule <select id="rule"><option value="">All rules</option></select></label>
+      <label>Category
+        <select id="category">
+          <option value="">All</option>
+          <option value="driving">Driving</option>
+          <option value="serious">Serious</option>
+          <option value="dangerous">Dangerous</option>
+        </select>
+      </label>
+      <div class="legend">
+        <div><span class="swatch heat"></span>Learner faults <small id="fault-source"></small></div>
+        <div><span class="dot slight"></span><span class="dot serious"></span><span class="dot fatal"></span>Collisions: slight / serious / fatal <small>real DfT data</small></div>
+      </div>
+      <p id="updated">Loading…</p>
+      <p class="credit">Collisions: DfT STATS19, Open Government Licence. Map © OpenStreetMap contributors.</p>
+    </aside>
     <script type="module" src="/src/instructor/main.ts"></script>
   </body>
 </html>

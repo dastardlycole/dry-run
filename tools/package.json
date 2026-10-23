@@ -8,7 +8,9 @@
     "osm-fetch": "tsx src/osm-fetch.ts",
     "osm-import": "tsx src/osm-import.ts",
     "route-build": "tsx src/route-build.ts",
-    "gen-tts": "tsx src/gen-tts.ts"
+    "gen-tts": "tsx src/gen-tts.ts",
+    "import-stats19": "tsx src/import-stats19.ts",
+    "stream": "tsx src/stream-setup.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.4.0",

@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import type { Db } from 'mongodb';
 import { env } from './env';
 import { mongoStatus } from './db';
+import { junctionStatsRoutes } from './junction-stats';
 import { sessionRoutes } from './sessions';
 
 /** The API, given a way to reach the database (Atlas when running, an in-memory one in tests). */
@@ -20,5 +21,6 @@ export function buildApp(getDb: () => Promise<Db>, opts: { logger?: boolean } = 
   }));
 
   sessionRoutes(app, getDb);
+  junctionStatsRoutes(app, getDb);
   return app;
 }

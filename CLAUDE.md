@@ -26,7 +26,7 @@ Use the name in the first column for `/rename`. Tick off when committed. Times a
 | 4 | `directions-faults` | Spoken directions (cached Gemini TTS, Web Speech fallback) + fault engine R1–R6 | ✅ done | Sat 12:00 |
 | — | **checkpoint** | Roads usable? If not, hand-build the demo junctions | — | Sat 12:00 |
 | 5 | `faults-to-atlas` | R9 + R11, sessions start/end, `POST /api/events`, result screen | ✅ done | Sat 13:30 |
-| 6 | `stream-heatmap` | Stream Processing → `junction_stats`, STATS19 import, instructor heatmap + collisions layer | Drive → heatmap updates in ~10 s | Sat 15:00 |
+| 6 | `stream-heatmap` | Stream Processing → `junction_stats`, STATS19 import, instructor heatmap + collisions layer | ✅ done | Sat 15:00 |
 | 7 | `debrief-rag` | Guidance ingest + autoEmbed index, Argon debrief, citation checker, debrief screen | Tests for the checker + screenshot | Sat 17:00 |
 | 8 | `tts-demo-mode` | Spoken result (TTS pipeline already built in row 4: `npm run gen-tts -w tools`), demo seed data, `R` reset | Full run from start to debrief | Sat 18:00 |
 | — | **checkpoint** | Everything above working end to end? If not, fix only that | — | Sat 18:00 |
@@ -39,6 +39,8 @@ Use the name in the first column for `/rename`. Tick off when committed. Times a
 ## Project notes
 
 - **It must look like the real place.** That's the moat: learners practise *their* test route, so it has to look like the streets they'll drive on test day. Otherwise it's just a random driving sim. Must-haves come first, but realism (`photoreal-tiles`) comes straight after the P0 checkpoint, before any P1 feature. Don't spend time polishing the boxy OSM look; it's the fallback.
+
+- **The instructor heatmap (row 6) is not wanted.** It's built (Stream Processing → `junction_stats` → `/instructor` map, STATS19 crashes in Atlas), but I find it confusing and useless with one route. Don't spend more time on it or polish it; keep it only because the MongoDB track needs Stream Processing. Prefer learner-facing work and realism. Before building any feature, say plainly what the user will see and whether it'll look thin with our data.
 
 - Run everything from the repo root: `npm run dev` (client on :5173, server on :3000), `npm run typecheck`, `npm test`.
 - Secrets live in `.env` at the root (copy from `.env.example`). Never commit it.
