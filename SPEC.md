@@ -331,7 +331,7 @@ Times are targets. Each block ends with something that runs. Commit at the end o
 
 1. **15 s — problem + persona:** "This is [name]. Their test at [centre] is in [n] weeks. Pass rate ~48.7%, ~22-week waits, routes unpublished since 2010."
 2. **(P1) 20 s —** examiner asks a "tell me" question; learner answers by voice; examiner accepts it.
-3. **75 s — drive:** spoken directions; deliberate wrong lane at the roundabout (R9) and signal without mirror (R3).
+3. **75 s — drive:** spoken directions; deliberate wrong signal at the roundabout (R6) and signal without mirror (R3). The real approach has one lane (OSM `lanes=1`, matches the satellite view), so R9 cannot fire on this route.
 4. **30 s — debrief:** result, pins on map, explanations streaming in with DVSA citations, "X% of learners get a fault here · N collisions here since 2020".
 5. **45 s — instructor dashboard:** heatmap updates live (Stream Processing); real collision layer; plain-English search (P1); Saint drafts report + lesson awaiting approval (P1).
 6. **15 s —** who pays + what's next (more centres, adaptive routes).

@@ -10,6 +10,11 @@ export const MIN_LEAD_M = 40;
 const WORDS_PER_S = 2;
 /** The car has to be this far past the last manoeuvre before the next direction, so they don't overlap. */
 const PASSED_M = 5;
+/**
+ * Further than this from the route's driving line, the car has left the route (missed a turn, drove
+ * off): its place on the route is only a guess then, so no directions until it's back.
+ */
+export const OFF_ROUTE_M = 15;
 /** A first manoeuvre this close to the start is given with the opening, while the car is still parked. */
 export const START_DIRECTION_M = 200;
 
@@ -32,8 +37,16 @@ export class Director {
     this.openingSaid = false;
   }
 
-  /** Sentences to start saying now, given the car's distance along the route and its speed (m/s). */
-  update(m: number, speedMs: number): string[] {
+  /** The last direction (on a test route, "pull up on the left") has been given. */
+  get finished(): boolean {
+    return this.directions.length > 0 && this.said.has(this.directions.length - 1);
+  }
+
+  /**
+   * Sentences to start saying now, given the car's distance along the route, its speed (m/s) and how
+   * far it is from the route's driving line.
+   */
+  update(m: number, speedMs: number, offM = 0): string[] {
     const out: string[] = [];
     if (!this.openingSaid) {
       this.openingSaid = true;
@@ -44,6 +57,7 @@ export class Director {
         this.said.add(0);
       }
     }
+    if (offM > OFF_ROUTE_M) return out;
     // The next manoeuvre ahead of the car. Ones behind it are left unsaid, not dropped: if the car's
     // place on the route jumped forward by mistake and comes back, they're still given.
     const i = this.directions.findIndex((d) => d.atM >= m);

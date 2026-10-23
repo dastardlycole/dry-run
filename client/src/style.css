@@ -21,4 +21,26 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color:
 .fault.serious { background: #ff8a3d; }
 .fault.dangerous { background: #ff4a4a; color: #fff; }
 #caption { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); max-width: min(720px, calc(100% - 32px)); padding: 8px 16px; border-radius: 6px; background: rgba(0, 0, 0, 0.65); font-size: 18px; text-align: center; }
+#result { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.6); }
+#result .card { width: min(760px, 100%); max-height: 100%; overflow: auto; padding: 20px 24px; border-radius: 10px; background: #1b1f24; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); }
+#result h1 { margin: 0 0 12px; font-size: 44px; letter-spacing: 0.04em; text-transform: uppercase; }
+#result h1.pass { color: #4ad66d; }
+#result h1.fail { color: #ff5a5a; }
+#result .counts { display: flex; gap: 10px; margin-bottom: 16px; }
+#result .count { flex: 1; padding: 8px 12px; border-radius: 6px; background: #262c33; border-left: 5px solid; display: flex; align-items: baseline; gap: 8px; }
+#result .count b { font-size: 26px; }
+#result .count.driving { border-color: #ffd24a; }
+#result .count.serious { border-color: #ff8a3d; }
+#result .count.dangerous { border-color: #ff4a4a; }
+#result .body { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+#result .list { flex: 1 1 300px; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+#result .list li { display: flex; gap: 10px; align-items: baseline; padding: 6px 8px; border-radius: 6px; background: #262c33; }
+#result .list .n { min-width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #111; background: #ffd24a; }
+#result .list .serious .n { background: #ff8a3d; }
+#result .list .dangerous .n { background: #ff4a4a; color: #fff; }
+#result .list .time { opacity: 0.6; font-variant-numeric: tabular-nums; }
+#result .list .none { opacity: 0.8; }
+#result .minimap { flex: none; border-radius: 6px; }
+#result .save { margin: 14px 0 0; font-size: 13px; opacity: 0.7; }
+#result .keys { margin: 4px 0 0; font-size: 13px; opacity: 0.7; }
 [hidden] { display: none !important; }

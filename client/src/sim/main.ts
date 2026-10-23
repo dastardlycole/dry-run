@@ -3,10 +3,13 @@ import * as THREE from 'three';
 import { CENTRE } from '../config';
 import { Director } from '../examiner/director';
 import { routeDirections } from '../examiner/phrases';
+import { PullUp } from '../examiner/pullup';
 import { Voice } from '../examiner/voice';
 import { FaultEngine, toFaultEvent, type SessionInfo } from '../faults/engine';
 import { speedLimitAt } from '../faults/limits';
-import { RULE_NAMES, type Frame } from '../faults/types';
+import { countFaults, resultOf } from '../faults/result';
+import { RULE_NAMES, type Contact, type Fault, type Frame } from '../faults/types';
+import { Sync } from '../net/sync';
 import { GuideArrows, LightHeads, loadRoute, routeLinesMesh } from '../world/furniture';
 import { buildSiteLights, signalSites, TrafficLights } from '../world/lights';
 import { RouteProgress } from '../world/progress';
@@ -15,9 +18,12 @@ import { addBuildingColliders, addParkedCars } from '../world/solids';
 import { buildWorld, emptyWorld, groundHalfM, loadWorld } from '../world/world';
 import { Cameras } from './camera';
 import { Car } from './car';
+import { Contacts } from './contacts';
 import { MPH_PER_MS, toggleIndicator, type Indicator } from './controls';
 import { Hud } from './hud';
 import { Input } from './input';
+import { placeOf } from './place';
+import { ResultScreen, type ResultFault } from './result-screen';
 
 // The drivable car in the OSM world around the test centre (SPEC §4.1, §4.2).
 const PHYSICS_DT = 1 / 60;
@@ -62,7 +68,10 @@ const [worldData, route] = await Promise.all([
   }),
 ]);
 const roadStart = buildWorld(worldData, scene);
-addBuildingColliders(world, worldData);
+/** What each solid thing is, by collider handle, for R11. */
+const solidKind = new Map<number, Contact>();
+const buildingCollider = addBuildingColliders(world, worldData);
+if (buildingCollider) solidKind.set(buildingCollider.handle, 'building');
 
 const highwayOf = new Map(worldData.roads.map((r) => [r.wayId, r.highway]));
 const lights = new TrafficLights(
@@ -76,7 +85,7 @@ if (route) {
   scene.add(routeLinesMesh(route));
   guide = new GuideArrows(route);
   scene.add(guide.mesh);
-  addParkedCars(world, scene, route.parkedCars);
+  for (const c of addParkedCars(world, scene, route.parkedCars)) solidKind.set(c.handle, 'parkedCar');
 }
 
 const car = new Car(world, scene);
@@ -97,23 +106,81 @@ voice.onSpeak = (text) => hud.showCaption(text);
 const director = route ? new Director(routeDirections(route)) : null;
 const edgeById = new Map(worldData.graph.edges.map((e) => [e.id, e]));
 const routeEdges = route ? route.edges.flatMap((id) => edgeById.get(id) ?? []) : [];
+const roadByWay = new Map(worldData.roads.map((r) => [r.wayId, r]));
 const faults = route
   ? new FaultEngine({
       steps: route.steps,
       lightFor: (edgeId, t) => lights.stateFor(edgeId, t),
       junctions: worldData.junctions,
+      roadFor: (edgeId) => roadByWay.get(edgeById.get(edgeId)?.wayId ?? -1),
     })
   : null;
+const pullUp = route ? new PullUp(route.lengthM) : null;
 const toLatLng = makeProjection(CENTRE.lat, CENTRE.lng).toLatLng;
-/** Local for now; sessions are saved to the server in a later feature. */
-const newSession = (): SessionInfo => ({
-  sessionId: crypto.randomUUID(),
-  learnerId: 'demo-learner',
-  centreId: CENTRE.id,
-  startedAtMs: Date.now() - simTime * 1000,
-});
-let session = newSession();
+
+// Sessions and faults go to the server in the background (SPEC §9); the drive never waits for it.
+const sync = new Sync();
+sync.start();
+const resultScreen = new ResultScreen(route?.line ?? []);
+/** One per browser, kept between visits. There are no accounts. */
+const learnerId = (() => {
+  const KEY = 'dryrun.learnerId';
+  try {
+    const id = localStorage.getItem(KEY) ?? `learner-${crypto.randomUUID()}`;
+    localStorage.setItem(KEY, id);
+    return id;
+  } catch {
+    return `learner-${crypto.randomUUID()}`;
+  }
+})();
+/** The test in progress: null before the first key press, and between a reset and the next frame. */
+let session: SessionInfo | null = null;
+let ended = false;
 let faultCount = 0;
+/** This test's faults, for the result screen. */
+let found: { fault: Fault; place: string }[] = [];
+const contacts = new Contacts();
+
+function openSession() {
+  const now = Date.now();
+  // Fault times are this session's start plus sim time (startedAtMs is when sim time was 0), so a
+  // replayed trace gives the same times. Sim time stops while paused, so they can run a little early.
+  session = { sessionId: crypto.randomUUID(), learnerId, centreId: CENTRE.id, startedAtMs: now - simTime * 1000 };
+  sync.startSession({
+    sessionId: session.sessionId,
+    learnerId,
+    centreId: CENTRE.id,
+    routeId: route!.id,
+    startedAt: new Date(now).toISOString(),
+  });
+}
+
+/** The drive is over (pulled up, or Enter): show the result from local faults, and save it behind the scenes. */
+function endDrive() {
+  if (!session || ended) return;
+  ended = true;
+  voice.stop();
+  const counts = countFaults(found.map((f) => f.fault));
+  const rows: ResultFault[] = found.map(({ fault: f, place }) => ({ ...f, place }));
+  resultScreen.show(resultOf(counts), counts, rows);
+  sync.endSession(session.sessionId, new Date().toISOString());
+  showSaveState();
+}
+
+/** The line on the result screen about saving; the server's own result replaces it once saved. */
+function showSaveState() {
+  if (!session || !resultScreen.visible || !sync.pendingFor(session.sessionId)) return;
+  resultScreen.setSave(sync.state === 'offline' ? 'Server offline: the result will be saved when it is back.' : 'Saving to Atlas…');
+}
+sync.onState = showSaveState;
+sync.onSaved = (saved) => {
+  if (session?.sessionId !== saved.sessionId || !resultScreen.visible) return;
+  resultScreen.setSave(`Saved to Atlas · server result ${saved.result} · session ${saved.sessionId.slice(0, 8)}`);
+};
+sync.onFailed = (id) => {
+  if (session?.sessionId === id && resultScreen.visible) resultScreen.setSave("Couldn't save this test: the server refused it.");
+};
+
 /** Frames since the last reset, so a real drive can be saved as a test trace (dev only). */
 const trace: Frame[] = [];
 /** About 15 minutes at 60 fps: plenty for the demo route, without growing forever in an idle tab. */
@@ -124,10 +191,9 @@ const start = () => (started = true);
 window.addEventListener('keydown', start, { once: true });
 window.addEventListener('pointerdown', start, { once: true });
 
-/** Collisions involving the car. Logged for now; the R11 fault rule hooks in here later. */
-function onCollision(other: RAPIER.Collider) {
-  const p = other.translation();
-  console.log(`[car] collision with object at (${p.x.toFixed(1)}, ${p.z.toFixed(1)})`);
+/** The car started touching something (not the ground). The fault engine marks it as R11. */
+function onCollision(handle: number) {
+  contacts.start(handle, solidKind.get(handle) ?? 'other');
   hud.flashCollision();
 }
 
@@ -150,16 +216,24 @@ renderer.setAnimationLoop((now: number) => {
     else if (action === 'guide') {
       if (guide) guide.mesh.visible = !guide.mesh.visible;
     }
+    else if (action === 'end') endDrive();
     else if (action === 'reset') {
       car.reset();
       progress?.reset();
       indicator = 'off';
       faults?.reset();
       director?.reset();
+      pullUp?.reset();
       voice.stop();
       hud.clearFaults();
-      session = newSession();
+      resultScreen.hide();
+      // An unfinished test is saved as ended here, with the faults so far. A new one starts on the next frame.
+      if (session && !ended) sync.endSession(session.sessionId, new Date().toISOString());
+      session = null;
+      ended = false;
       faultCount = 0;
+      found = [];
+      contacts.clear();
       trace.length = 0;
     } else if (!paused) indicator = toggleIndicator(indicator, action === 'indicateLeft' ? 'left' : 'right');
   }
@@ -171,13 +245,13 @@ renderer.setAnimationLoop((now: number) => {
       car.update(input.drive(), PHYSICS_DT);
       world.step(events);
       events.drainCollisionEvents((h1, h2, started) => {
-        if (!started) return;
         const carHandle = car.collider.handle;
         if (h1 !== carHandle && h2 !== carHandle) return;
         const other = h1 === carHandle ? h2 : h1;
         // The body scraping the ground (hard braking, bumps) isn't a crash.
         if (other === groundCollider.handle) return;
-        onCollision(world.getCollider(other));
+        if (started) onCollision(other);
+        else contacts.stop(other);
       });
       acc -= PHYSICS_DT;
       simTime += PHYSICS_DT;
@@ -193,8 +267,9 @@ renderer.setAnimationLoop((now: number) => {
     const pos: [number, number] = [car.mesh.position.x, car.mesh.position.z];
     const m = progress.update(pos);
     guide?.show(m);
-    if (started && !paused) {
-      for (const text of director!.update(m, car.speedMph / MPH_PER_MS)) voice.say(text);
+    if (started && !paused && !ended) {
+      if (!session) openSession();
+      for (const text of director!.update(m, car.speedMph / MPH_PER_MS, progress.offM)) voice.say(text);
       const frame: Frame = {
         t: simTime,
         pos,
@@ -203,14 +278,19 @@ renderer.setAnimationLoop((now: number) => {
         mirror: input.takeMirrorCheck(),
         routeM: m,
         offRouteM: progress.offM,
+        sideM: progress.sideM,
+        contact: contacts.take(),
         limitMph: speedLimitAt(pos, routeEdges),
       };
       if (import.meta.env.DEV && trace.length < MAX_TRACE_FRAMES) trace.push(frame);
       for (const f of faults!.step(frame)) {
-        const event = toFaultEvent(f, ++faultCount, session, toLatLng);
+        const event = toFaultEvent(f, ++faultCount, session!, toLatLng);
         console.log(`[fault] ${f.ruleId} ${RULE_NAMES[f.ruleId]} (${f.category})`, event);
         hud.flashFault(`${f.ruleId} · ${RULE_NAMES[f.ruleId]}`, f.category);
+        found.push({ fault: f, place: placeOf(f, route!.steps, worldData.roads) });
+        sync.addFault(event);
       }
+      if (pullUp!.update(simTime, m, car.speedMph, director!.finished)) endDrive();
     }
   }
   cameras.update({ lookLeft: input.lookLeft, lookRight: input.lookRight, mirror: input.mirror }, dt);

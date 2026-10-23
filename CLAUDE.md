@@ -25,7 +25,7 @@ Use the name in the first column for `/rename`. Tick off when committed. Times a
 | 3 | `world-route` | Car on real roads, road colliders, traffic lights, parked cars, fixed demo route | ✅ done | Sat 10:00 |
 | 4 | `directions-faults` | Spoken directions (cached Gemini TTS, Web Speech fallback) + fault engine R1–R6 | ✅ done | Sat 12:00 |
 | — | **checkpoint** | Roads usable? If not, hand-build the demo junctions | — | Sat 12:00 |
-| 5 | `faults-to-atlas` | R9 + R11, sessions start/end, `POST /api/events`, result screen | Tests + faults visible in Atlas | Sat 13:30 |
+| 5 | `faults-to-atlas` | R9 + R11, sessions start/end, `POST /api/events`, result screen | ✅ done | Sat 13:30 |
 | 6 | `stream-heatmap` | Stream Processing → `junction_stats`, STATS19 import, instructor heatmap + collisions layer | Drive → heatmap updates in ~10 s | Sat 15:00 |
 | 7 | `debrief-rag` | Guidance ingest + autoEmbed index, Argon debrief, citation checker, debrief screen | Tests for the checker + screenshot | Sat 17:00 |
 | 8 | `tts-demo-mode` | Spoken result (TTS pipeline already built in row 4: `npm run gen-tts -w tools`), demo seed data, `R` reset | Full run from start to debrief | Sat 18:00 |

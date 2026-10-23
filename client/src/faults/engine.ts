@@ -1,10 +1,10 @@
 import type { Vec2 } from '../world/types';
-import { mirrorBeforeSignal, newHistory, redLight, speeding, turns, type History } from './rules';
+import { collision, mirrorBeforeSignal, newHistory, redLight, roundaboutLane, speeding, turns, type History } from './rules';
 import type { Fault, FaultContext, FaultEvent, Frame } from './types';
 
 // Runs the rules over the drive, one frame at a time (SPEC §4.6). Same frames in → same faults out.
 
-const RULES = [speeding, redLight, mirrorBeforeSignal, turns];
+const RULES = [speeding, redLight, mirrorBeforeSignal, turns, roundaboutLane, collision];
 
 export class FaultEngine {
   private h: History = newHistory();

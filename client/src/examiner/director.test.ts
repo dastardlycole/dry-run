@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import route from '../../../assets/wanstead/route-demo.json';
 import { MPH_PER_MS } from '../sim/controls';
 import type { Route } from '../world/types';
-import { Director, LEAD_S, speechSeconds } from './director';
+import { Director, LEAD_S, OFF_ROUTE_M, speechSeconds } from './director';
 import { OPENING, routeDirections } from './phrases';
 
 const directions = routeDirections(route as Route);
@@ -57,6 +57,14 @@ describe('Director', () => {
     expect(d.update(265, 0)).toEqual(['Take the next road on the left.']);
   });
 
+  it('says nothing while the car is off the route, and carries on once it is back', () => {
+    const d = new Director([{ stepId: 'a', atM: 300, endM: 300, text: 'Take the next road on the left.' }]);
+    d.update(0, 0);
+    // Off the route, the car's place on it is a guess: it may look like it's at the next turn.
+    expect(d.update(280, 10, OFF_ROUTE_M + 20)).toEqual([]);
+    expect(d.update(280, 10, OFF_ROUTE_M - 5)).toEqual(['Take the next road on the left.']);
+  });
+
   it('starts over after a reset, and skips directions the car has already passed', () => {
     const d = new Director(directions);
     d.update(0, 10);
@@ -72,5 +80,15 @@ describe('Director', () => {
     // The car's place on the route wrongly jumps to near the end, then comes back.
     expect(d.update(1950, 10)).toEqual(["Pull up on the left when it's safe."]);
     expect(d.update(600, 10)).toEqual([directions[1].text]);
+  });
+
+  it('is finished once "pull up on the left" has been given', () => {
+    const d = new Director(directions);
+    d.update(0, 0);
+    expect(d.finished).toBe(false);
+    d.update(1950, 10);
+    expect(d.finished).toBe(true);
+    d.reset();
+    expect(d.finished).toBe(false);
   });
 });

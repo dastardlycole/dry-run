@@ -14,7 +14,7 @@ export interface DriveScript {
   mph: number | ((m: number) => number);
   limitMph?: number;
   /** Controls at each point and time. Anything left out is off. */
-  controls?: (m: number, t: number) => Partial<Pick<Frame, 'indicator' | 'mirror' | 'offRouteM'>>;
+  controls?: (m: number, t: number) => Partial<Pick<Frame, 'indicator' | 'mirror' | 'offRouteM' | 'sideM' | 'contact'>>;
   fps?: number;
 }
 
@@ -35,7 +35,9 @@ export function drive(route: Pick<Route, 'line' | 'lengthM'>, s: DriveScript): F
       indicator: c.indicator ?? 'off',
       mirror: c.mirror ?? false,
       routeM: m,
-      offRouteM: c.offRouteM ?? 0,
+      offRouteM: c.offRouteM ?? Math.abs(c.sideM ?? 0),
+      sideM: c.sideM ?? 0,
+      contact: c.contact ?? null,
       limitMph: s.limitMph ?? 30,
     });
     // A stopped car still has frames (waiting at lights), so time always moves on.

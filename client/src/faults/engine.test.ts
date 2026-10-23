@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import demo from '../../../assets/wanstead/route-demo.json';
+import world from '../../../assets/wanstead/world.json';
 import type { Light } from '../world/lights';
-import type { Route, RouteStep } from '../world/types';
+import type { Route, RouteStep, WorldData } from '../world/types';
 import { runTrace, toFaultEvent } from './engine';
 import { speedLimitAt } from './limits';
 import { makeProjection } from '../world/projection';
-import { expectedSignal } from './rules';
+import { countFaults, resultOf } from './result';
+import { expectedSignal, LANE_SAMPLE_M, SAME_CRASH_S } from './rules';
 import { carefulControls, drive } from './trace';
 import type { FaultContext, Frame } from './types';
 
-// Rules R1–R6 on scripted drives along the real Wanstead demo route (SPEC §4.6 FR-F5).
+// Rules R1–R6, R9 and R11 on scripted drives along the real Wanstead demo route (SPEC §4.6 FR-F5).
 
 const route = demo as Route;
 const step = (id: string) => route.steps.find((s) => s.id === id)!;
@@ -188,6 +190,123 @@ describe('R6 wrong signal', () => {
   it("doesn't judge a turn the car didn't take (off the route)", () => {
     const controls = withChange(s6.atM - 2, s6.atM + 2, () => ({ indicator: 'left', offRouteM: 20 }));
     expect(rules(drive(route, { mph: MPH, controls }))).toEqual([]);
+  });
+});
+
+describe('R9 roundabout lane', () => {
+  const s4 = step('s4');
+  const lineM = s4.line!.atM;
+  /** As if the approach had two 3.2 m lanes one way (the real one has one: see the last test). */
+  const twoLanes: FaultContext['roadFor'] = () => ({ lanes: 2, widthM: 6.4, oneway: true });
+  /** A careful drive at the roundabout `exit`, sitting `sideM` across from the driving line on the approach. */
+  const atExit = (exit: number, sideM: number, roadFor = twoLanes) => {
+    const r = { ...route, steps: route.steps.map((s) => (s.id === 's4' ? { ...s, exit } : s)) };
+    const c = carefulControls(r, MPH);
+    const controls = (m: number) => (m > lineM - LANE_SAMPLE_M - 10 && m < lineM + 2 ? { ...c(m), sideM } : c(m));
+    return runTrace({ ...ctx(), steps: r.steps, roadFor }, drive(r, { mph: MPH, controls }))
+      .filter((f) => f.ruleId === 'R9')
+      .map((f) => `${f.ruleId}:${f.category}:${f.junctionId}:${f.context.lane}`);
+  };
+
+  it('wants the right lane for the third exit of three', () => {
+    expect(atExit(3, 3.2)).toEqual([]);
+    expect(atExit(3, 0)).toEqual([`R9:driving:${s4.junctionId}:1`]);
+  });
+
+  it('wants the left lane for the first exit', () => {
+    expect(atExit(1, 0)).toEqual([]);
+    expect(atExit(1, 3.2)).toEqual([`R9:driving:${s4.junctionId}:2`]);
+  });
+
+  it('allows either lane for straight on', () => {
+    expect(atExit(2, 0)).toEqual([]);
+    expect(atExit(2, 3.2)).toEqual([]);
+  });
+
+  it('goes by where the car sat on the approach, not one moment', () => {
+    // Left lane all the way up, a swerve right only in the last metre: still the left lane.
+    const c = carefulControls(route, MPH);
+    const controls = (m: number) => (m > lineM - 1 && m < lineM + 2 ? { ...c(m), sideM: 3.2 } : c(m));
+    const faults = runTrace({ ...ctx(), roadFor: twoLanes }, drive(route, { mph: MPH, controls }));
+    expect(faults.map((f) => f.ruleId)).toEqual(['R9']);
+    expect(faults[0].context).toMatchObject({ lane: 1, expectedLane: 2 });
+  });
+
+  it('counts only the lanes going the same way on a two-way road', () => {
+    // Two lanes on a two-way road is one each way: in the "right lane" is in the oncoming one.
+    expect(atExit(3, 0, () => ({ lanes: 2, widthM: 6.4, oneway: false }))).toEqual([]);
+    // Four lanes two-way is two each way.
+    expect(atExit(3, 0, () => ({ lanes: 4, widthM: 12.8, oneway: false }))).toEqual([`R9:driving:${s4.junctionId}:1`]);
+    expect(atExit(3, 3.2, () => ({ lanes: 4, widthM: 12.8, oneway: false }))).toEqual([]);
+  });
+
+  it('forgets where the car sat on an approach it left without crossing the line', () => {
+    // Up the approach in the right lane, then reset to the start; the second time round, the left lane.
+    const c = carefulControls(route, MPH);
+    const lane = (m: number, sideM: number) => (m > lineM - LANE_SAMPLE_M - 10 && m < lineM + 2 ? { ...c(m), sideM } : c(m));
+    const first = drive(route, { toM: lineM - 5, mph: MPH, controls: (m) => lane(m, 3.2) });
+    const t0 = first.at(-1)!.t + 1;
+    const again = drive(route, { mph: MPH, controls: (m) => lane(m, 0) }).map((f) => ({ ...f, t: f.t + t0 }));
+    const faults = runTrace({ ...ctx(), roadFor: twoLanes }, [...first, ...again]).filter((f) => f.ruleId === 'R9');
+    expect(faults.map((f) => f.context.lane)).toEqual([1]);
+  });
+
+  it("can't mark a lane on the real demo approach, which has one lane in OSM", () => {
+    const w = world as unknown as WorldData;
+    const wayOf = new Map(w.graph.edges.map((e) => [e.id, e.wayId]));
+    const roadFor = (id: string) => w.roads.find((r) => r.wayId === wayOf.get(id));
+    expect(roadFor(s4.approachEdgeId)?.lanes).toBe(1);
+    expect(atExit(3, 3.2, roadFor)).toEqual([]);
+  });
+});
+
+describe('R11 collision', () => {
+  /** A careful drive touching `contact` between each pair of route distances. */
+  const hits = (...spans: [number, number][]) =>
+    rules(
+      drive(route, {
+        mph: MPH,
+        controls: (m) => ({ ...careful(m), contact: spans.some(([a, b]) => m >= a && m < b) ? 'parkedCar' : null }),
+      }),
+    );
+
+  it('marks one dangerous fault for a crash, however long the car stays touching', () => {
+    expect(hits([300, 340])).toEqual([expect.stringMatching(/^R11:dangerous:/)]);
+  });
+
+  it(`counts bounces less than ${SAME_CRASH_S} s apart as the same crash`, () => {
+    const v = MPH / 2.23694;
+    expect(hits([300, 301], [300 + (SAME_CRASH_S - 0.5) * v, 301 + (SAME_CRASH_S - 0.5) * v])).toHaveLength(1);
+  });
+
+  it('marks two crashes further apart than that as two faults', () => {
+    const gap = (SAME_CRASH_S + 1) * (MPH / 2.23694);
+    expect(hits([300, 301], [301 + gap, 302 + gap])).toHaveLength(2);
+  });
+
+  it('says what the car hit', () => {
+    const frames = drive(route, { mph: MPH, controls: (m) => ({ ...careful(m), contact: m > 300 && m < 301 ? 'building' : null }) });
+    expect(runTrace(ctx(), frames)[0].context).toEqual({ with: 'building' });
+  });
+});
+
+describe('result', () => {
+  const n = (driving: number, serious = 0, dangerous = 0) => ({ driving, serious, dangerous });
+
+  it('passes with up to 15 driving faults', () => {
+    expect(resultOf(n(0))).toBe('PASS');
+    expect(resultOf(n(15))).toBe('PASS');
+  });
+
+  it('fails with 16 driving faults, or any serious or dangerous one', () => {
+    expect(resultOf(n(16))).toBe('FAIL');
+    expect(resultOf(n(0, 1))).toBe('FAIL');
+    expect(resultOf(n(0, 0, 1))).toBe('FAIL');
+  });
+
+  it('counts faults by category', () => {
+    const faults = [{ category: 'driving' }, { category: 'dangerous' }, { category: 'driving' }] as const;
+    expect(countFaults([...faults])).toEqual(n(2, 0, 1));
   });
 });
 

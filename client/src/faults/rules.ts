@@ -2,7 +2,7 @@ import type { Indicator } from '../sim/controls';
 import type { RouteStep, Vec2 } from '../world/types';
 import type { Fault, FaultContext, Frame } from './types';
 
-// Rules R1–R6 (SPEC §4.6 FR-F3). Each is a plain function of the current frame and what the engine
+// Rules R1–R6, R9 and R11 (SPEC §4.6 FR-F3). Each is a plain function of the current frame and what the engine
 // remembers about earlier frames: no clocks, no randomness, no 3D. The AI never decides faults.
 
 export const SPEED_MARGIN_MPH = 2;
@@ -13,6 +13,10 @@ export const MIRROR_BEFORE_TURN_S = 5;
 export const SIGNAL_BEFORE_TURN_S = 3;
 /** A turn only counts when the car is this close to the route's driving line (it really took the route). */
 export const ON_ROUTE_M = 8;
+/** R9 judges the lane from where the car sat over this much road before the give-way line. */
+export const LANE_SAMPLE_M = 20;
+/** R11: contact this soon after the last one is the same crash (bouncing off and back in, or scraping along a wall). */
+export const SAME_CRASH_S = 3;
 /** A bigger jump along the route in one frame is a reset or a lost car, not driving over a line. */
 const MAX_STEP_M = 30;
 
@@ -30,6 +34,10 @@ export interface History {
   seriousSince: number | null;
   markedDriving: boolean;
   markedSerious: boolean;
+  /** R9: sum and count of the car's sideM on each roundabout approach, by step id. */
+  laneSide: Record<string, { sum: number; n: number }>;
+  /** R11: last sim time the car was touching something. */
+  lastContactT: number;
 }
 
 export const newHistory = (): History => ({
@@ -41,6 +49,8 @@ export const newHistory = (): History => ({
   seriousSince: null,
   markedDriving: false,
   markedSerious: false,
+  laneSide: {},
+  lastContactT: -Infinity,
 });
 
 export function nearestJunctionId(pos: Vec2, junctions: FaultContext['junctions']): string {
@@ -154,4 +164,61 @@ export function turns(f: Frame, h: History, ctx: FaultContext): Fault[] {
     }
   }
   return out;
+}
+
+/**
+ * Lanes and width in the car's direction. OSM counts both directions on a two-way road, so the car
+ * gets half (an odd lane out is taken as the other way's, or shared).
+ */
+export function lanesOneWay(road: { lanes: number; widthM: number; oneway: boolean }): { lanes: number; widthM: number } {
+  if (road.oneway) return { lanes: road.lanes, widthM: road.widthM };
+  const lanes = Math.max(1, Math.floor(road.lanes / 2));
+  return { lanes, widthM: (road.widthM * lanes) / road.lanes };
+}
+
+/**
+ * R9: on a roundabout approach with two or more lanes, the car was in the wrong lane for its exit.
+ * Left lane for the first exit, right lane for exits past straight on, either for straight on.
+ * The lane comes from where the car sat across the road (the driving line is the middle of the left
+ * lane), averaged over the last LANE_SAMPLE_M before the give-way line. There are no painted lanes yet.
+ */
+export function roundaboutLane(f: Frame, h: History, ctx: FaultContext): Fault[] {
+  const out: Fault[] = [];
+  for (const s of ctx.steps) {
+    if (s.action !== 'roundabout' || !s.line) continue;
+    const found = ctx.roadFor?.(s.approachEdgeId);
+    const road = found && lanesOneWay(found);
+    if (!road || road.lanes < 2) continue;
+    const lineM = s.line.atM;
+    const onApproach = f.routeM >= lineM - LANE_SAMPLE_M && f.routeM < lineM;
+    if (onApproach && f.offRouteM < ON_ROUTE_M) {
+      const acc = (h.laneSide[s.id] ??= { sum: 0, n: 0 });
+      acc.sum += f.sideM;
+      acc.n++;
+    }
+    if (!crossed(h.prev, f, lineM)) {
+      // Left the approach without crossing the line (reset, jumped, turned away): start afresh next time.
+      if (!onApproach) delete h.laneSide[s.id];
+      continue;
+    }
+    const acc = h.laneSide[s.id];
+    delete h.laneSide[s.id];
+    const side = acc?.n ? acc.sum / acc.n : f.sideM;
+    const laneW = road.widthM / road.lanes;
+    const lane = Math.min(road.lanes, Math.max(1, Math.round(side / laneW) + 1));
+    const want = expectedSignal(s);
+    const expectedLane = want === 'left' ? 1 : want === 'right' ? road.lanes : null;
+    if (expectedLane !== null && lane !== expectedLane) {
+      out.push(fault(f, 'R9', 'driving', s.junctionId, { stepId: s.id, exit: s.exit, lane, expectedLane, lanes: road.lanes }));
+    }
+  }
+  return out;
+}
+
+/** R11: the car hit something (not the ground). One fault per crash, however many times it bumps. */
+export function collision(f: Frame, h: History, ctx: FaultContext): Fault[] {
+  if (!f.contact) return [];
+  const newCrash = f.t - h.lastContactT > SAME_CRASH_S;
+  h.lastContactT = f.t;
+  return newCrash ? [fault(f, 'R11', 'dangerous', nearestJunctionId(f.pos, ctx.junctions), { with: f.contact })] : [];
 }

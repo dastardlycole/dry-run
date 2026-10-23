@@ -16,6 +16,19 @@ describe('RouteProgress', () => {
     expect(p.update([50, -4])).toBeCloseTo(154);
   });
 
+  it('says which side of the line the car is on, facing along the route', () => {
+    const p = new RouteProgress({ line, lineM });
+    // Going east, right is south (+z).
+    p.update([10, 0.5]);
+    expect(p.sideM).toBeCloseTo(0.5);
+    p.update([20, -1]);
+    expect(p.sideM).toBeCloseTo(-1);
+    // Coming back west, right is north (−z).
+    p.update([100, -2]);
+    p.update([50, -5]);
+    expect(p.sideM).toBeCloseTo(1);
+  });
+
   it('stays on the outward leg even though the way back is only 4 m away', () => {
     const p = new RouteProgress({ line, lineM });
     p.update([10, 0]);
