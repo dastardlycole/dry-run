@@ -22,7 +22,7 @@ Use the name in the first column for `/rename`. Tick off when committed. Times a
 | 0 | `repo-setup` | Client/server/tools skeleton, health endpoint | ✅ done | Fri 19:30 |
 | 1 | `car` | Rapier car on a flat plane, cameras, all keyboard controls, speed in mph | ✅ done | Fri 22:30 |
 | 2 | `osm-import` | Overpass export → roads, buildings, road graph JSON in `/assets/wanstead` | ✅ done | Fri 01:30 |
-| 3 | `world-route` | Car on real roads, road colliders, traffic lights, parked cars, fixed demo route | Drive the full route | Sat 10:00 |
+| 3 | `world-route` | Car on real roads, road colliders, traffic lights, parked cars, fixed demo route | ✅ done | Sat 10:00 |
 | 4 | `directions-faults` | Spoken directions (Web Speech) + fault engine R1–R6 | Vitest tests per rule | Sat 12:00 |
 | — | **checkpoint** | Roads usable? If not, hand-build the demo junctions | — | Sat 12:00 |
 | 5 | `faults-to-atlas` | R9 + R11, sessions start/end, `POST /api/events`, result screen | Tests + faults visible in Atlas | Sat 13:30 |

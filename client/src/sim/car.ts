@@ -39,6 +39,8 @@ export class Car {
       RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(0, SPAWN_HEIGHT, 0)
         .setCanSleep(false)
+        // Building walls are thin, so stop a fast car stepping through one.
+        .setCcdEnabled(true)
         .setLinearDamping(0.05)
         .setAngularDamping(0.5),
     );
@@ -78,16 +80,15 @@ export class Car {
     cabin.position.set(-0.4, 0.52, 0);
     const roof = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.05, HALF.z * 2 - 0.1), paint);
     roof.position.set(-0.75, 0.9, 0);
-    // Dashboard, steering wheel and mirror for the first-person view.
+    // Dashboard and steering wheel for the first-person view. No mirror mesh: from the driver's seat it
+    // was a big dark block on the windscreen, and M shows the rear view on screen anyway.
     const dash = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, HALF.z * 2 - 0.15), dark);
     dash.position.set(0.45, 0.26, 0);
     const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.025, 8, 24), dark);
     wheel.position.set(0.2, 0.42, DRIVER_EYE.z);
     wheel.rotation.y = Math.PI / 2;
     wheel.rotation.x = 0.4;
-    const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, 0.18), new THREE.MeshLambertMaterial({ color: 0x555555 }));
-    mirror.position.copy(MIRROR_POS);
-    this.mesh.add(lower, cabin, roof, dash, wheel, mirror);
+    this.mesh.add(lower, cabin, roof, dash, wheel);
 
     const tyreGeom = new THREE.CylinderGeometry(WHEEL_RADIUS, WHEEL_RADIUS, 0.22, 16);
     tyreGeom.rotateX(Math.PI / 2); // axle along Z

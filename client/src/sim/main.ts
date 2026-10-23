@@ -1,6 +1,10 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 import { CENTRE } from '../config';
+import { GuideArrows, LightHeads, loadRoute, routeLinesMesh } from '../world/furniture';
+import { buildSiteLights, signalSites, TrafficLights } from '../world/lights';
+import { RouteProgress } from '../world/progress';
+import { addBuildingColliders, addParkedCars } from '../world/solids';
 import { buildWorld, emptyWorld, groundHalfM, loadWorld } from '../world/world';
 import { Cameras } from './camera';
 import { Car } from './car';
@@ -30,24 +34,50 @@ const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
 world.timestep = PHYSICS_DT;
 const events = new RAPIER.EventQueue(true);
 
-// The road and building meshes are visual only for now; the car drives on a flat ground collider.
-// Road and building colliders come with the world-route feature (SPEC §4.1, §4.2).
+// Roads are flat at ground level, so one ground collider carries the car everywhere (SPEC §4.1).
 const groundHalf = groundHalfM(CENTRE.radiusM);
 const groundCollider = world.createCollider(
   RAPIER.ColliderDesc.cuboid(groundHalf, 0.1, groundHalf).setTranslation(0, -0.1, 0),
 );
 // If the map can't load, keep going on plain grass so the car still drives.
 let mapNote = '';
-const worldData = await loadWorld(CENTRE.id).catch((err) => {
-  console.error('[world] failed to load, using empty world', err);
-  mapNote = 'map failed to load · ';
-  return emptyWorld(CENTRE);
-});
-const startPose = buildWorld(worldData, scene);
+const [worldData, route] = await Promise.all([
+  loadWorld(CENTRE.id).catch((err) => {
+    console.error('[world] failed to load, using empty world', err);
+    mapNote = 'map failed to load · ';
+    return emptyWorld(CENTRE);
+  }),
+  // Without a route the car still drives, from the nearest main road to the centre.
+  loadRoute(CENTRE.id, 'demo').catch((err) => {
+    console.error('[route] failed to load', err);
+    mapNote += 'route failed to load · ';
+    return null;
+  }),
+]);
+const roadStart = buildWorld(worldData, scene);
+addBuildingColliders(world, worldData);
+
+const highwayOf = new Map(worldData.roads.map((r) => [r.wayId, r.highway]));
+const lights = new TrafficLights(
+  buildSiteLights(signalSites(worldData.junctions), worldData.graph.edges, (e) => highwayOf.get(e.wayId) === 'service'),
+);
+const lightHeads = new LightHeads(scene, lights.sites, worldData);
+
+let guide: GuideArrows | null = null;
+const progress = route ? new RouteProgress(route) : null;
+if (route) {
+  scene.add(routeLinesMesh(route));
+  guide = new GuideArrows(route);
+  scene.add(guide.mesh);
+  addParkedCars(world, scene, route.parkedCars);
+}
 
 const car = new Car(world, scene);
-car.setStart(startPose.x, startPose.z, startPose.heading);
+if (route) car.setStart(route.start.pos[0], route.start.pos[1], route.start.heading);
+else car.setStart(roadStart.x, roadStart.z, roadStart.heading);
 car.reset();
+/** Seconds of driving so far (stops while paused); the traffic lights run on this. */
+let simTime = 0;
 const cameras = new Cameras(car);
 const input = new Input();
 const hud = new Hud();
@@ -77,8 +107,12 @@ renderer.setAnimationLoop((now: number) => {
   for (const action of input.takeActions()) {
     if (action === 'pause') paused = !paused;
     else if (action === 'camera') cameras.toggle();
+    else if (action === 'guide') {
+      if (guide) guide.mesh.visible = !guide.mesh.visible;
+    }
     else if (action === 'reset') {
       car.reset();
+      progress?.reset();
       indicator = 'off';
     } else if (!paused) indicator = toggleIndicator(indicator, action === 'indicateLeft' ? 'left' : 'right');
   }
@@ -99,6 +133,7 @@ renderer.setAnimationLoop((now: number) => {
         onCollision(world.getCollider(other));
       });
       acc -= PHYSICS_DT;
+      simTime += PHYSICS_DT;
       steps++;
     }
     if (steps === MAX_STEPS_PER_FRAME) acc = 0; // fell behind; don't spiral
@@ -106,13 +141,15 @@ renderer.setAnimationLoop((now: number) => {
 
   car.sync();
   car.mesh.updateMatrixWorld();
+  lightHeads.update(simTime);
+  if (progress && guide) guide.show(progress.update([car.mesh.position.x, car.mesh.position.z]));
   cameras.update({ lookLeft: input.lookLeft, lookRight: input.lookRight, mirror: input.mirror }, dt);
   hud.update({ speedMph: car.speedMph, gear: car.gear, indicator, camera: cameras.mode, paused }, now);
   cameras.render(renderer, scene);
 });
 
 // Handy for poking at the sim from the browser console during development.
-if (import.meta.env.DEV) Object.assign(window, { sim: { car, input, world, cameras } });
+if (import.meta.env.DEV) Object.assign(window, { sim: { car, input, world, cameras, renderer, scene, route, lights, progress, time: () => simTime } });
 
 const status = document.querySelector('#status')!;
 fetch('/api/health')

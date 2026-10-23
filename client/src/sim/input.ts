@@ -1,7 +1,7 @@
 import type { DriveInput } from './controls';
 
 // One-press actions. Held keys (driving, look, mirror) are read every frame instead.
-export type Action = 'indicateLeft' | 'indicateRight' | 'camera' | 'pause' | 'reset';
+export type Action = 'indicateLeft' | 'indicateRight' | 'camera' | 'pause' | 'reset' | 'guide';
 
 const ACTIONS: Record<string, Action> = {
   KeyZ: 'indicateLeft',
@@ -9,6 +9,7 @@ const ACTIONS: Record<string, Action> = {
   KeyC: 'camera',
   Escape: 'pause',
   KeyR: 'reset',
+  KeyG: 'guide',
 };
 
 // Keys the browser would otherwise use for scrolling.

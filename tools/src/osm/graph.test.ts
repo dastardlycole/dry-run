@@ -106,5 +106,7 @@ describe('buildGraph', () => {
   it('types junctions on a roundabout ring', () => {
     const r = buildGraph([way(100, [1, 2, 3], { roundabout: true, oneway: true }), way(200, [2, 5, 4])], pos, new Map());
     expect(r.junctions[0]).toMatchObject({ id: 'osm-node-2', type: 'roundabout' });
+    expect(r.edges.filter((e) => e.roundabout).map((e) => e.wayId)).toEqual([100, 100]);
+    expect(r.edges.some((e) => e.wayId === 200 && e.roundabout)).toBe(false);
   });
 });

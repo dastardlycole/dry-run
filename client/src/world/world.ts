@@ -14,9 +14,9 @@ const MIN_MARKED_WIDTH_M = 5;
 
 // Flat layers sit on y = 0 and draw in this order without writing depth, so they never flicker
 // against each other however far away they are. Anything solid (buildings, the car) draws after them.
-const LAYER = { ground: -4, pavement: -3, road: -2, marking: -1 } as const;
+export const LAYER = { ground: -4, pavement: -3, road: -2, marking: -1 } as const;
 
-const COLOURS = {
+export const COLOURS = {
   grass: 0x5d8a46,
   pavement: 0xa9a59c,
   road: 0x45474b,
@@ -130,7 +130,7 @@ function groundTriangles(size: number): Vec2[] {
   ];
 }
 
-function flatMesh(tris: Vec2[], colour: number, renderOrder: number): THREE.Mesh {
+export function flatMesh(tris: Vec2[], colour: number, renderOrder: number): THREE.Mesh {
   const pos = new Float32Array(tris.length * 3);
   const normal = new Float32Array(tris.length * 3);
   for (let t = 0; t < tris.length; t += 3) {

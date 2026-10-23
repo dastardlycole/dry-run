@@ -81,7 +81,7 @@ export function buildGraph(ways: WayIn[], pos: Map<number, Vec2>, controlTags: M
       const points = ids.map((n) => pos.get(n)!);
       const a = ids[0];
       const b = id;
-      const base = { wayId: w.id, lengthM: polylineLength(points), maxspeedMph: w.maxspeedMph };
+      const base = { wayId: w.id, lengthM: polylineLength(points), maxspeedMph: w.maxspeedMph, ...(w.roundabout && { roundabout: true }) };
       edges.push({ id: `${w.id}:${piece}:f`, from: nodeId(a), to: nodeId(b), points, ...base });
       if (!w.oneway) edges.push({ id: `${w.id}:${piece}:b`, from: nodeId(b), to: nodeId(a), points: [...points].reverse(), ...base });
       link(a, b);
