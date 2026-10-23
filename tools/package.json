@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "osm-fetch": "tsx src/osm-fetch.ts",
+    "osm-import": "tsx src/osm-import.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.4.0",
@@ -12,6 +15,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "vitest": "^5.0.5"
   }
 }

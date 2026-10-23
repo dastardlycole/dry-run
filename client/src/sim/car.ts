@@ -14,7 +14,7 @@ const WHEELS = [
   { x: -1.3, z: -0.75, front: false },
   { x: -1.3, z: 0.75, front: false },
 ];
-const START = { x: 0, y: 1.0, z: 0 };
+const SPAWN_HEIGHT = 1.0;
 
 /** Where the driver's eyes are, in the car frame. */
 export const DRIVER_EYE = new THREE.Vector3(-0.15, 0.7, 0.37);
@@ -32,11 +32,12 @@ export class Car {
   private prevInput: DriveInput = { throttle: false, brake: false, left: false, right: false, handbrake: false };
   private vehicle: RAPIER.DynamicRayCastVehicleController;
   private wheelMeshes: { pivot: THREE.Object3D; tyre: THREE.Object3D }[] = [];
+  private start = { x: 0, z: 0, heading: 0 };
 
   constructor(private world: RAPIER.World, scene: THREE.Scene) {
     this.body = world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
-        .setTranslation(START.x, START.y, START.z)
+        .setTranslation(0, SPAWN_HEIGHT, 0)
         .setCanSleep(false)
         .setLinearDamping(0.05)
         .setAngularDamping(0.5),
@@ -150,9 +151,15 @@ export class Car {
     });
   }
 
+  /** Where `reset` puts the car. `heading` is the rotation about +Y; 0 faces +X. */
+  setStart(x: number, z: number, heading: number) {
+    this.start = { x, z, heading };
+  }
+
   reset() {
-    this.body.setTranslation(START, true);
-    this.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
+    const { x, z, heading } = this.start;
+    this.body.setTranslation({ x, y: SPAWN_HEIGHT, z }, true);
+    this.body.setRotation({ x: 0, y: Math.sin(heading / 2), z: 0, w: Math.cos(heading / 2) }, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     this.gear = 'D';

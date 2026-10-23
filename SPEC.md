@@ -69,6 +69,8 @@ Submission notes per track: §14.
 - **[P0]** FR-W9. "© OpenStreetMap contributors" attribution visible.
 - **[P1]** FR-W10. Junctions where geometry was guessed (missing lane tags) are flagged `geometryConfidence: low` and shown on the dashboard (honest uncertainty).
 - **Approach:** try osm2streets first (time-box: Fri night). If it fights back, buffer OSM centrelines by `lanes × 3.2 m` with turf. **Fallback at Sat 12:00:** hand-model the 4–5 demo junctions; keep OSM for buildings/background.
+- **Decision (Fri, `osm-import`):** skipped osm2streets (Rust tool, too risky to run on Windows in the time). Roads are built in the browser from centrelines instead: a strip of `lanes × 3.2 m` per road (service roads at least 4 m) plus a round patch where roads meet or end. No turf needed. Two upgrades on top: **pavements** (a 2 m paler strip either side, none on service roads or motorways) and **lane lines** (solid edge lines, dashed lane dividers, a longer-dash centre line on two-way roads, all stopping short of junctions). Trade-off: junctions are rounded blobs, not proper kerbed corners, and bridges (`layer`) are drawn flat. osm2streets can still be tried later without changing `world.json`.
+- **Output:** one file, `assets/wanstead/world.json` (types in `client/src/world/types.ts`): roads, buildings, junctions (typed from nearby signals/give-way/stop/crossing nodes, `geometryConfidence`), controls, and the directed road graph. The browser builds the meshes when it loads.
 
 ### 4.2 Player vehicle
 - **[P0]** FR-V1. Rapier raycast vehicle (`DynamicRayCastVehicleController`): accelerate, brake, steer, reverse. Speedometer in mph. Fallback: kinematic bicycle model.
