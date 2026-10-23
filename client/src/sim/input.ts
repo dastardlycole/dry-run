@@ -18,34 +18,33 @@ const PREVENT = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Spa
 export class Input {
   private held = new Set<string>();
   private queue: Action[] = [];
-  private mirrorEndedAt = -Infinity;
+  /** M went down since the fault engine last looked, so a quick tap between two frames still counts. */
+  private mirrorTapped = false;
 
   constructor(target: Window = window) {
     target.addEventListener('keydown', (e) => {
       if (PREVENT.has(e.code)) e.preventDefault();
       // Repeats still mark the key as held: after a blur, a key held down only sends repeats.
       this.held.add(e.code);
+      if (e.code === 'KeyM') this.mirrorTapped = true;
       if (e.repeat) return;
       const action = ACTIONS[e.code];
       if (action) this.queue.push(action);
     });
     target.addEventListener('keyup', (e) => {
-      if (e.code === 'KeyM') this.mirrorEndedAt = performance.now();
       this.held.delete(e.code);
     });
     // Don't leave keys stuck down if the window loses focus mid-press.
     target.addEventListener('blur', () => {
-      if (this.mirror) this.mirrorEndedAt = performance.now();
       this.held.clear();
     });
   }
 
-  /**
-   * performance.now() of the last moment the driver was checking the mirror: now while M is held,
-   * otherwise when M was let go. The fault engine uses this (R3/R4).
-   */
-  get lastMirrorAt(): number {
-    return this.mirror ? performance.now() : this.mirrorEndedAt;
+  /** True if M is held, or was pressed at all since the last call. Read once per frame by the fault engine (R3/R4). */
+  takeMirrorCheck(): boolean {
+    const checked = this.mirror || this.mirrorTapped;
+    this.mirrorTapped = false;
+    return checked;
   }
 
   private any(...codes: string[]): boolean {

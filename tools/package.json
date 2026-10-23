@@ -7,7 +7,8 @@
     "test": "vitest run",
     "osm-fetch": "tsx src/osm-fetch.ts",
     "osm-import": "tsx src/osm-import.ts",
-    "route-build": "tsx src/route-build.ts"
+    "route-build": "tsx src/route-build.ts",
+    "gen-tts": "tsx src/gen-tts.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.4.0",

@@ -20,11 +20,14 @@ const LOST_M = 25;
 export class RouteProgress {
   /** Metres along the route's driving line. */
   m = 0;
+  /** How far the car is from the driving line, in metres. */
+  offM = 0;
 
   constructor(private route: Pick<Route, 'line' | 'lineM'>) {}
 
   reset() {
     this.m = 0;
+    this.offM = 0;
   }
 
   update(p: Vec2): number {
@@ -47,6 +50,7 @@ export class RouteProgress {
       hit = { d: any.d, m: lineM[any.k] + any.t * (lineM[any.k + 1] - lineM[any.k]) };
     }
     this.m = hit.m;
+    this.offM = hit.d;
     return this.m;
   }
 

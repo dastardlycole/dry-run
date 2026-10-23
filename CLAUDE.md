@@ -23,12 +23,12 @@ Use the name in the first column for `/rename`. Tick off when committed. Times a
 | 1 | `car` | Rapier car on a flat plane, cameras, all keyboard controls, speed in mph | ✅ done | Fri 22:30 |
 | 2 | `osm-import` | Overpass export → roads, buildings, road graph JSON in `/assets/wanstead` | ✅ done | Fri 01:30 |
 | 3 | `world-route` | Car on real roads, road colliders, traffic lights, parked cars, fixed demo route | ✅ done | Sat 10:00 |
-| 4 | `directions-faults` | Spoken directions (Web Speech) + fault engine R1–R6 | Vitest tests per rule | Sat 12:00 |
+| 4 | `directions-faults` | Spoken directions (cached Gemini TTS, Web Speech fallback) + fault engine R1–R6 | ✅ done | Sat 12:00 |
 | — | **checkpoint** | Roads usable? If not, hand-build the demo junctions | — | Sat 12:00 |
 | 5 | `faults-to-atlas` | R9 + R11, sessions start/end, `POST /api/events`, result screen | Tests + faults visible in Atlas | Sat 13:30 |
 | 6 | `stream-heatmap` | Stream Processing → `junction_stats`, STATS19 import, instructor heatmap + collisions layer | Drive → heatmap updates in ~10 s | Sat 15:00 |
 | 7 | `debrief-rag` | Guidance ingest + autoEmbed index, Argon debrief, citation checker, debrief screen | Tests for the checker + screenshot | Sat 17:00 |
-| 8 | `tts-demo-mode` | Cached Gemini TTS, spoken result, demo seed data, `R` reset | Full run from start to debrief | Sat 18:00 |
+| 8 | `tts-demo-mode` | Spoken result (TTS pipeline already built in row 4: `npm run gen-tts -w tools`), demo seed data, `R` reset | Full run from start to debrief | Sat 18:00 |
 | — | **checkpoint** | Everything above working end to end? If not, fix only that | — | Sat 18:00 |
 | 8b | `photoreal-tiles` | Google Photorealistic 3D Tiles as the visible world (OSM stays as the invisible logic layer); car follows real ground height; OSM look as fallback. **First thing after the P0 checkpoint, ahead of all P1 work** | Drive the route and recognise the real streets | — |
 | 9 | `hybrid-search` | Atlas Search + `$rankFusion` + `$rerank` instructor search | Test queries return sensible junctions | Sat 19:30 |

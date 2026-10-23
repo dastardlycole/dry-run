@@ -1,41 +1,40 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { Input } from './input';
 
 const key = (type: string, code: string) => Object.assign(new Event(type), { code, repeat: false });
 
-describe('Input.lastMirrorAt', () => {
-  afterEach(() => vi.restoreAllMocks());
-
+describe('Input.takeMirrorCheck', () => {
   const setup = () => {
     const target = new EventTarget();
-    let now = 0;
-    vi.spyOn(performance, 'now').mockImplementation(() => now);
-    const input = new Input(target as unknown as Window);
-    return { target, input, at: (t: number) => (now = t) };
+    return { target, input: new Input(target as unknown as Window) };
   };
 
-  it('is -Infinity before any mirror check', () => {
-    expect(setup().input.lastMirrorAt).toBe(-Infinity);
+  it('is false before any mirror check', () => {
+    expect(setup().input.takeMirrorCheck()).toBe(false);
   });
 
-  it('counts a long hold up to when M is let go', () => {
-    const { target, input, at } = setup();
-    at(1000);
+  it('is true every frame while M is held, and stops when it is let go', () => {
+    const { target, input } = setup();
     target.dispatchEvent(key('keydown', 'KeyM'));
-    at(4000);
-    expect(input.lastMirrorAt).toBe(4000); // still holding
+    expect(input.takeMirrorCheck()).toBe(true);
+    expect(input.takeMirrorCheck()).toBe(true);
     target.dispatchEvent(key('keyup', 'KeyM'));
-    at(5000);
-    expect(input.lastMirrorAt).toBe(4000);
+    expect(input.takeMirrorCheck()).toBe(false);
   });
 
-  it('records the time if the window loses focus while M is held', () => {
-    const { target, input, at } = setup();
-    at(1000);
+  it('counts a quick tap that starts and ends between two frames, once', () => {
+    const { target, input } = setup();
     target.dispatchEvent(key('keydown', 'KeyM'));
-    at(2500);
+    target.dispatchEvent(key('keyup', 'KeyM'));
+    expect(input.takeMirrorCheck()).toBe(true);
+    expect(input.takeMirrorCheck()).toBe(false);
+  });
+
+  it('lets go of M if the window loses focus', () => {
+    const { target, input } = setup();
+    target.dispatchEvent(key('keydown', 'KeyM'));
+    input.takeMirrorCheck();
     target.dispatchEvent(new Event('blur'));
-    at(9000);
-    expect(input.lastMirrorAt).toBe(2500);
+    expect(input.takeMirrorCheck()).toBe(false);
   });
 });
