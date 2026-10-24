@@ -58,6 +58,12 @@ Plan and reasons in SPEC §16. The checkpoint build is tagged `checkpoint-2`. Wo
 | 21 | `road-users` | A few cars at the roundabout and lights, pedestrians at the zebra | Faults for not giving way |
 | 20 | `manoeuvres` | Parallel park / bay park / pull up on the right, emergency stop | Each one marked by code |
 
+## For later (not scheduled)
+
+- Add an accelerometer and move the turn signal indicator to a better spot on screen.
+- The examiner's voice changes between sentences (sounds like a different person). Likely cause: sentences without cached Gemini TTS fall back to the browser voice; new routes need `npm run gen-tts -w tools`. Also make the fallback voice match (same gender).
+- Light engine rev sounds.
+
 ## Project notes
 
 - **It must look like the real place.** That's the moat: learners practise *their* test area, so it has to look like the streets they'll drive on test day. Otherwise it's just a random driving sim. Must-haves come first, but realism (`photoreal-tiles`) comes straight after the P0 checkpoint, before any P1 feature. Don't spend time polishing the boxy OSM look; it's the fallback.
