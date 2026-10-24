@@ -33,7 +33,7 @@ import { Contacts } from './contacts';
 import { MPH_PER_MS, toggleIndicator, type Indicator } from './controls';
 import { Hud } from './hud';
 import { Input } from './input';
-import { placeOf } from './place';
+import { areaOf, placeOf, roadAt } from './place';
 import type { DebriefView } from './fault-list';
 import { PauseScreen } from './pause-screen';
 import { ResultScreen, type ResultFault } from './result-screen';
@@ -78,6 +78,16 @@ const picker = new CentrePicker({
 });
 if (!params.has('route')) picker.show();
 picker.onHide = () => input.clear();
+// "Change route" (top, beside the road name) and the link in the help line open the card for this centre.
+const changeRoute = (e: MouseEvent) => {
+  // Ctrl/Shift/middle-click on the link still opens the start page in a new tab.
+  if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+  e.preventDefault();
+  (e.currentTarget as HTMLElement).blur(); // so Space (handbrake) doesn't press it again
+  picker.show();
+};
+document.getElementById('change-route')!.addEventListener('click', changeRoute);
+document.getElementById('change-centre')!.addEventListener('click', changeRoute);
 const [worldData, route] = await Promise.all([
   loadWorld(where.base).catch((err) => {
     console.error('[world] failed to load, using empty world', err);
@@ -142,6 +152,11 @@ let simTime = 0;
 const cameras = new Cameras(car);
 const input = new Input();
 const hud = new Hud();
+// The place line at the top: the road the car is on and the area. Looked up twice a second, not every frame
+// (thousands of road pieces); on an unnamed road it keeps the last name.
+const area = areaOf(centre.name, centre.address);
+let placeAt = 0;
+let roadName = '';
 let indicator: Indicator = 'off';
 let paused = false;
 
@@ -469,6 +484,11 @@ renderer.setAnimationLoop((now: number) => {
     }
   }
   cameras.update({ lookLeft: input.lookLeft, lookRight: input.lookRight, mirror: input.mirror }, dt);
+  if (now - placeAt > 500) {
+    placeAt = now;
+    roadName = roadAt(worldData.roads, [car.mesh.position.x, car.mesh.position.z], roadName) || roadName;
+    hud.showPlace(roadName ? `${roadName} · ${area}` : area);
+  }
   hud.update({ speedMph: car.speedMph, gear: car.gear, indicator, camera: cameras.mode, paused }, now);
   renderer.shadowMap.needsUpdate = true;
   cameras.render(renderer, scene);

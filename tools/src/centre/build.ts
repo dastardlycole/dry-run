@@ -18,7 +18,16 @@ export const CENTRE_RADIUS_M = 1000;
 export const STAGES = ['Downloading the roads', 'Downloading parks and trees', 'Building the streets', 'Planning test routes'] as const;
 export const stepLine = (i: number) => `@@step ${i + 1}/${STAGES.length} ${STAGES[i]}`;
 
-export const toCentre = (c: CentreInfo): Centre => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, radiusM: CENTRE_RADIUS_M });
+// The address goes into world.json for the place line at the top of the screen ("… · Goodmayes, Ilford").
+export const toCentre = (c: CentreInfo): Centre => ({
+  id: c.id,
+  name: c.name,
+  lat: c.lat,
+  lng: c.lng,
+  radiusM: CENTRE_RADIUS_M,
+  address: c.address,
+  postcode: c.postcode,
+});
 
 /** Builds the centre into `outDir` and returns the route ids made. Throws if no route could be made. */
 export async function buildCentre(info: CentreInfo, outDir: string, log: (line: string) => void = console.log): Promise<string[]> {

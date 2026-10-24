@@ -28,6 +28,7 @@ export class Hud {
   private faults = $('faults');
   private caption = $('caption');
   private captionTimer = 0;
+  private place = $('place');
 
   update(s: HudState, now: number) {
     this.speed.textContent = `${Math.round(Math.abs(s.speedMph))} mph`;
@@ -61,6 +62,12 @@ export class Hud {
     this.caption.hidden = false;
     clearTimeout(this.captionTimer);
     this.captionTimer = window.setTimeout(() => (this.caption.hidden = true), CAPTION_MS);
+  }
+
+  /** Where the car is, e.g. "Goodmayes Road · Goodmayes, Ilford". */
+  showPlace(text: string) {
+    if (this.place.textContent !== text) this.place.textContent = text;
+    this.place.hidden = !text;
   }
 
   clearFaults() {

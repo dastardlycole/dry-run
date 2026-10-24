@@ -72,7 +72,8 @@ export interface GraphNode {
 }
 
 export interface WorldData {
-  centre: { id: string; name: string; lat: number; lng: number; radiusM: number };
+  /** address and postcode: the DVSA ones, for centres built from the finder (tools/src/centre/build.ts). */
+  centre: { id: string; name: string; lat: number; lng: number; radiusM: number; address?: string; postcode?: string };
   generatedAt: string;
   roads: Road[];
   buildings: Building[];
