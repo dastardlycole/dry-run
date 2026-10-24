@@ -46,6 +46,14 @@ export class Input {
     });
   }
 
+  /** Forgets every key held or pressed so far (keys pressed before the drive began). */
+  clear() {
+    this.held.clear();
+    this.queue = [];
+    this.mirrorTapped = false;
+    this.lookTapped = { left: false, right: false };
+  }
+
   /** True if M is held, or was pressed at all since the last call. Read once per frame by the fault engine (R3/R4). */
   takeMirrorCheck(): boolean {
     const checked = this.mirror || this.mirrorTapped;

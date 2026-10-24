@@ -39,8 +39,9 @@ export interface StartPose {
   heading: number;
 }
 
-export async function loadWorld(centreId: string): Promise<WorldData> {
-  const res = await fetch(`/${centreId}/world.json`);
+/** `base` is where the centre's files are: /<id> for one that ships with the game, or the server's cache. */
+export async function loadWorld(base: string): Promise<WorldData> {
+  const res = await fetch(`${base}/world.json`);
   if (!res.ok) throw new Error(`world.json: HTTP ${res.status} (run tools/src/osm-import.ts)`);
   return res.json();
 }

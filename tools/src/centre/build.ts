@@ -14,20 +14,26 @@ import type { CentreInfo } from './finder';
 /** How far the map reaches from the centre, as at Wanstead. */
 export const CENTRE_RADIUS_M = 1000;
 
+/** The stages of a build, for the loading bar (centre-build prints "@@step <n>/<of> <label>"). */
+export const STAGES = ['Downloading the roads', 'Downloading parks and trees', 'Building the streets', 'Planning test routes'] as const;
+export const stepLine = (i: number) => `@@step ${i + 1}/${STAGES.length} ${STAGES[i]}`;
+
 export const toCentre = (c: CentreInfo): Centre => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, radiusM: CENTRE_RADIUS_M });
 
 /** Builds the centre into `outDir` and returns the route ids made. Throws if no route could be made. */
 export async function buildCentre(info: CentreInfo, outDir: string, log: (line: string) => void = console.log): Promise<string[]> {
   const centre = toCentre(info);
-  log(`Downloading roads around ${centre.name}…`);
+  log(stepLine(0));
   const roadsRaw = JSON.parse(await overpass(roadsQuery(centre)));
-  log('Downloading parks and trees…');
+  log(stepLine(1));
   const sceneryRaw = JSON.parse(await overpass(sceneryQuery(centre)));
 
+  log(stepLine(2));
   const world: WorldData = importWorld(roadsRaw, centre);
   log(worldSummary(world));
   const scenery = buildScenery(sceneryRaw, roadsRaw, centre);
   log(scenerySummary(scenery));
+  log(stepLine(3));
   const autos = autoRoutes(world);
   if (!autos.length) throw new Error(`no test route could be made around ${centre.name}`);
 

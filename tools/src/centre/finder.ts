@@ -18,7 +18,8 @@ export const centreId = (name: string) =>
     .replace(/\(London\)/i, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+    .replace(/^-|-$/g, '')
+    .slice(0, 60);
 
 const textOf = (html: string, cls: string) =>
   (html.match(new RegExp(`class="[^"]*\\b${cls}\\b[^"]*"[^>]*>([^<]*)<`)) ?? [])[1]?.trim().replace(/&amp;/g, '&') ?? '';

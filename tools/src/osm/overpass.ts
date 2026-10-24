@@ -6,7 +6,15 @@ import { bboxAround } from './project';
 
 export type Centre = WorldData['centre'];
 
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+/** The main Overpass server, then public mirrors: the main one turns queries away when it's busy. */
+const OVERPASS_URLS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
+/** Rounds through all the servers before giving up, with a pause between rounds. */
+const ROUNDS = 3;
+const ROUND_PAUSE_MS = 5000;
 
 /** Roads run a little past the building radius so the edge of the map isn't ragged. */
 export const roadExtentM = (c: Centre) => c.radiusM + 100;
@@ -50,13 +58,28 @@ out skel qt;
 `;
 }
 
-/** Runs an Overpass query and returns the raw JSON text. */
+/** Runs an Overpass query and returns the raw JSON text, trying the mirrors when a server is busy. */
 export async function overpass(query: string): Promise<string> {
-  const res = await fetch(OVERPASS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'dry-run-hackathon' },
-    body: new URLSearchParams({ data: query }),
-  });
-  if (!res.ok) throw new Error(`Overpass returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  return res.text();
+  let last: unknown;
+  for (let round = 0; round < ROUNDS; round++) {
+    if (round) await new Promise((r) => setTimeout(r, ROUND_PAUSE_MS * round));
+    for (const url of OVERPASS_URLS) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'dry-run-hackathon' },
+          body: new URLSearchParams({ data: query }),
+          signal: AbortSignal.timeout(200_000),
+        });
+        const text = await res.text();
+        // A busy server can answer 200 with an error instead of data ("runtime error: ... timed out").
+        if (res.ok && text.trimStart().startsWith('{') && !/"remark":\s*"runtime error/.test(text)) return text;
+        last = new Error(`${new URL(url).host} returned ${res.status}: ${text.slice(0, 200)}`);
+      } catch (err) {
+        last = err;
+      }
+      console.warn(`Overpass: ${String(last).split('\n')[0]}; trying the next server`);
+    }
+  }
+  throw last;
 }

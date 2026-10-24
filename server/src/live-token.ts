@@ -20,7 +20,7 @@ export const loadTellMe = (): TellMeFile => JSON.parse(readFileSync(TELL_ME_FILE
 
 /** What the examiner is told. The verdict is the model's; the fault it leads to is logged by the sim's code. */
 export function instructions(q: TellMeQuestion): string {
-  return `You are a calm, friendly UK driving examiner (DVSA) at Wanstead driving test centre in London. Speak British English, briefly.
+  return `You are a calm, friendly UK driving examiner (DVSA) at a driving test centre. Speak British English, briefly.
 The learner is sitting in the car, about to start their driving test. You ask them one 'tell me' vehicle safety question.
 
 1. When the learner says they're ready, ask this question word for word and say nothing else: "${q.question}"

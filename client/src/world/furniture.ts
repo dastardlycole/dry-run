@@ -8,8 +8,8 @@ import type { Road, Route, StopLine, Vec2, WorldData } from './types';
 // Route and junction furniture (SPEC §4.1 FR-W2, FR-W3, §4.3 FR-T1): traffic light heads, stop and
 // give-way lines on the route, and the route guide line.
 
-export async function loadRoute(centreId: string, routeId: string): Promise<Route> {
-  const res = await fetch(`/${centreId}/route-${routeId}.json`);
+export async function loadRoute(base: string, routeId: string): Promise<Route> {
+  const res = await fetch(`${base}/route-${routeId}.json`);
   if (!res.ok) throw new Error(`route-${routeId}.json: HTTP ${res.status} (run npm run route-build -w tools)`);
   return res.json();
 }
