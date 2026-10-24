@@ -20,6 +20,11 @@ describe('routeSummary', () => {
     expect(routeSummary({ lengthM: 2998, steps })).toBe('3.0 km · 3 turns · 1 roundabout · 2 sets of lights · 2 give-ways');
   });
 
+  it('a long run of close nodes is more than one junction', () => {
+    const steps = [0, 40, 80, 120, 160].map((m) => step('ahead', 'signals', m)) as RouteStep[];
+    expect(junctionCounts(steps).lights).toBe(3);
+  });
+
   it('leaves out kinds the route has none of', () => {
     expect(routeSummary({ lengthM: 1200, steps: [step('left', 'none', 100)] as RouteStep[] })).toBe('1.2 km · 1 turn');
   });

@@ -30,11 +30,11 @@ beforeEach(async () => {
 });
 
 const startedAt = '2026-10-24T10:00:00.000Z';
-const start = (sessionId = 'sess-1', more: object = {}) =>
+const start = (sessionId = 'sess-1') =>
   app.inject({
     method: 'POST',
     url: '/api/sessions',
-    payload: { sessionId, learnerId: 'learner-1', centreId: 'wanstead', routeId: 'demo', startedAt, ...more },
+    payload: { sessionId, learnerId: 'learner-1', centreId: 'wanstead', routeId: 'demo', startedAt },
   });
 
 const event = (n: number, category: FaultEvent['category'] = 'driving', over: Partial<FaultEvent> = {}): FaultEvent => ({
@@ -135,14 +135,22 @@ describe('POST /api/sessions/:id/end', () => {
     expect(s).toMatchObject({ result: 'PASS', endedAt: new Date('2026-10-24T10:05:00.000Z') });
   });
 
-  it('scales the limit to the route length sent at the start: 3 km allows 4', async () => {
+  it("scales the limit to the route's length, looked up by the server: 3 km allows 4", async () => {
     await db.dropDatabase();
-    await start('sess-1', { routeLengthM: 3000 });
+    const short = Fastify();
+    sessionRoutes(short, async () => db, { routeLengthM: (centreId, routeId) => (routeId === 'demo' ? 3000 : undefined) });
+    const post = (url: string, payload: object) => short.inject({ method: 'POST', url, payload });
+    await post('/api/sessions', { sessionId: 'sess-1', learnerId: 'learner-1', centreId: 'wanstead', routeId: 'demo', startedAt });
+    const endShort = () => post('/api/sessions/sess-1/end', { endedAt: '2026-10-24T10:05:00.000Z', finished: true });
     await send(Array.from({ length: 4 }, (_, i) => event(i + 1)));
-    expect((await end()).json()).toMatchObject({ result: 'PASS', maxDrivingFaults: 4 });
+    expect((await endShort()).json()).toMatchObject({ result: 'PASS', maxDrivingFaults: 4 });
     await send([event(5)]);
-    expect((await end()).json()).toMatchObject({ result: 'FAIL', maxDrivingFaults: 4 });
+    expect((await endShort()).json()).toMatchObject({ result: 'FAIL', maxDrivingFaults: 4 });
     expect(await db.collection('sessions').findOne({ _id: 'sess-1' as never })).toMatchObject({ routeLengthM: 3000, maxDrivingFaults: 4 });
+    // A length the client sends is dropped: only the route's own file counts.
+    await post('/api/sessions', { sessionId: 'sess-2', learnerId: 'learner-1', centreId: 'wanstead', routeId: 'demo', routeLengthM: 99_000, startedAt });
+    expect(await db.collection('sessions').findOne({ _id: 'sess-2' as never })).toMatchObject({ routeLengthM: 3000 });
+    await short.close();
   });
 
   it('fails with 16 driving faults, or one dangerous', async () => {

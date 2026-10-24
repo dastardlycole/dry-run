@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { CentreInfo } from '../../tools/src/centre/finder';
 import { buildApp } from './app';
+import { Centres } from './centres';
 
 // Typing a centre builds its map in the background; the page polls until it's ready.
 
@@ -89,5 +90,20 @@ describe('finding and building a centre', () => {
       expect((await app.inject({ url })).statusCode).toBe(404);
     }
     expect((await app.inject({ url: '/api/centres/nowhere' })).statusCode).toBe(404);
+  });
+});
+
+describe('route lengths, for the pass mark', () => {
+  const centres = new Centres({ find: async () => null, build: async () => {}, assetsDir, cacheDir }, app.log);
+
+  it("reads a route's length from its own file", () => {
+    writeFileSync(join(assetsDir, 'wanstead', 'route-auto-3.json'), '{"id":"auto-3","lengthM":2998}');
+    expect(centres.routeLengthM('wanstead', 'auto-3')).toBe(2998);
+  });
+
+  it('knows nothing of a route it has no file for, or a file without a length', () => {
+    expect(centres.routeLengthM('wanstead', 'auto-9')).toBeUndefined();
+    expect(centres.routeLengthM('wanstead', 'demo')).toBeUndefined();
+    expect(centres.routeLengthM('../wanstead', 'auto-3')).toBeUndefined();
   });
 });

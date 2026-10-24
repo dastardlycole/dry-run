@@ -3,7 +3,7 @@ import type { Route, RouteStep } from './types';
 // The one-line description of a route on the start card: "3.0 km · 6 turns · 4 sets of lights · 5 give-ways".
 // Pure, so it can be tested.
 
-/** Junction nodes closer than this along the route are one junction (a light-controlled crossroads has several). */
+/** Junction nodes this close after a junction's first node are that junction (a light-controlled crossroads has several). */
 const SAME_JUNCTION_M = 50;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -14,8 +14,9 @@ export function junctionCounts(steps: Pick<RouteStep, 'action' | 'control' | 'at
   const lastAt: Partial<Record<keyof typeof counts, number>> = {};
   const add = (kind: keyof typeof counts, atM: number) => {
     const prev = lastAt[kind];
+    if (prev !== undefined && atM - prev < SAME_JUNCTION_M) return;
     lastAt[kind] = atM;
-    if (prev === undefined || atM - prev >= SAME_JUNCTION_M) counts[kind]++;
+    counts[kind]++;
   };
   for (const s of steps) {
     if (s.action === 'roundabout') add('roundabouts', s.atM);

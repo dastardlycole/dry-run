@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, readdirSync, type ReadStream } from 'node:fs';
+import { createReadStream, existsSync, readdirSync, readFileSync, type ReadStream } from 'node:fs';
 import { resolve } from 'node:path';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import type { CentreInfo } from '../../tools/src/centre/finder';
@@ -88,6 +88,26 @@ export class Centres {
   }
 
   find = (text: string) => this.deps.find(text);
+
+  /**
+   * How long a route is, from its own file (shipped or built), so the server sets the test's pass mark
+   * itself rather than taking the client's word. Undefined for a route it doesn't have.
+   */
+  routeLengthM(id: string, routeId: string): number | undefined {
+    if (!ID.test(id) || !FILE.test(`route-${routeId}.json`)) return undefined;
+    for (const dir of [this.deps.assetsDir, this.deps.cacheDir]) {
+      const path = resolve(dir, id, `route-${routeId}.json`);
+      if (!existsSync(path)) continue;
+      try {
+        const lengthM = JSON.parse(readFileSync(path, 'utf8')).lengthM;
+        return typeof lengthM === 'number' && lengthM > 0 ? lengthM : undefined;
+      } catch (err) {
+        this.log.warn(err, `route-${routeId}.json of ${id} could not be read`);
+        return undefined;
+      }
+    }
+    return undefined;
+  }
 }
 
 export function centreRoutes(app: FastifyInstance, centres: Centres) {

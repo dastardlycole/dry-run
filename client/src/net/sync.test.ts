@@ -24,7 +24,7 @@ function fakeServer() {
   return server;
 }
 
-const start = { sessionId: 's', learnerId: 'l', centreId: 'wanstead', routeId: 'demo', routeLengthM: 1988, startedAt: '2026-10-24T10:00:00.000Z' };
+const start = { sessionId: 's', learnerId: 'l', centreId: 'wanstead', routeId: 'demo', startedAt: '2026-10-24T10:00:00.000Z' };
 const fault = (n: number) => ({ _id: `s:${n}`, sessionId: 's' }) as FaultEvent;
 
 describe('Sync', () => {

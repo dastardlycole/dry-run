@@ -93,7 +93,7 @@ const [worldData, route] = await Promise.all([
   }),
 ]);
 const centre = worldData.centre;
-picker.named(centre.name);
+if (!mapNote.startsWith('map failed')) picker.named(centre.name);
 // Roads are flat at ground level, so one ground collider carries the car everywhere (SPEC §4.1).
 const groundHalf = groundHalfM(centre.radiusM);
 const groundCollider = world.createCollider(
@@ -205,7 +205,6 @@ function openSession() {
     learnerId,
     centreId: centre.id,
     routeId: route!.id,
-    routeLengthM: route!.lengthM,
     startedAt: new Date(now).toISOString(),
   });
   // The 'tell me' question came first; a wrong answer is this test's first fault.

@@ -48,7 +48,9 @@ export function buildApp(
 
   const debriefer = new Debriefer(getDb, opts.debrief ?? { findGuidance: () => async () => [], ai: null }, app.log);
   const voice = new SummaryVoice(debriefer, opts.speak ?? null, app.log);
+  const centres = opts.centres ? new Centres(opts.centres, app.log) : null;
   sessionRoutes(app, getDb, {
+    routeLengthM: (centreId, routeId) => centres?.routeLengthM(centreId, routeId),
     faultsSaved: (events) => debriefer.faultsSaved(events),
     sessionEnded: (sessionId) => {
       debriefer.sessionEnded(sessionId);
@@ -59,7 +61,7 @@ export function buildApp(
   debriefRoutes(app, getDb, debriefer);
   summaryVoiceRoutes(app, voice);
   liveTokenRoutes(app, opts.mintLiveToken ?? null);
-  if (opts.centres) centreRoutes(app, new Centres(opts.centres, app.log));
+  if (centres) centreRoutes(app, centres);
   if (opts.clientDir) {
     // Vite's /assets/ files have hashed names and never change.
     app.register(fastifyStatic, {

@@ -36,7 +36,7 @@ const startBody = {
   type: 'object',
   required: ['sessionId', 'learnerId', 'centreId', 'routeId', 'startedAt'],
   additionalProperties: false,
-  properties: { sessionId: id, learnerId: id, centreId: id, routeId: id, routeLengthM: { type: 'number', minimum: 0, maximum: 100_000 }, startedAt: time },
+  properties: { sessionId: id, learnerId: id, centreId: id, routeId: id, startedAt: time },
 };
 
 const eventSchema = {
@@ -101,17 +101,21 @@ export async function ensureIndexes(db: Db) {
 export interface SessionHooks {
   faultsSaved?: (events: FaultEventDoc[]) => void;
   sessionEnded?: (sessionId: string) => void;
+  /** The route's length from its file, which sets the driving fault limit. Without it, the real 15. */
+  routeLengthM?: (centreId: string, routeId: string) => number | undefined;
 }
 
 export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>, hooks: SessionHooks = {}) {
   const sessions = async () => (await getDb()).collection<SessionDoc>('sessions');
   const events = async () => (await getDb()).collection<FaultEventDoc>('fault_events');
 
-  app.post<{ Body: { sessionId: string; learnerId: string; centreId: string; routeId: string; routeLengthM?: number; startedAt: string } }>(
+  app.post<{ Body: { sessionId: string; learnerId: string; centreId: string; routeId: string; startedAt: string } }>(
     '/api/sessions',
     { schema: { body: startBody } },
     async (req) => {
-      const { sessionId, learnerId, centreId, routeId, routeLengthM, startedAt } = req.body;
+      const { sessionId, learnerId, centreId, routeId, startedAt } = req.body;
+      // Looked up here, not sent by the client: the server works the result out for itself.
+      const routeLengthM = hooks.routeLengthM?.(centreId, routeId);
       // A repeat (the client retrying) changes nothing.
       await (await sessions()).updateOne(
         { _id: sessionId },

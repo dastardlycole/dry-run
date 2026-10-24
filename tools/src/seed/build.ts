@@ -1,4 +1,4 @@
-import { countFaults, resultOf } from '../../../client/src/faults/result';
+import { countFaults, drivingFaultLimit, resultOf } from '../../../client/src/faults/result';
 import type { Category, RuleId } from '../../../client/src/faults/types';
 import type { Route, RouteStep, Vec2 } from '../../../client/src/world/types';
 import type { FaultEventDoc, SessionDoc } from '../../../server/src/sessions';
@@ -156,8 +156,10 @@ export function buildSeed(route: Pick<Route, 'id' | 'lengthM' | 'steps'>, opts: 
       routeId: route.id,
       startedAt,
       endedAt: new Date(startedAt.getTime() + Math.round((route.lengthM / PACE_MS + 30) * 1000)),
-      result: resultOf(counts),
+      result: resultOf(counts, true, drivingFaultLimit(route.lengthM)),
       counts,
+      routeLengthM: route.lengthM,
+      maxDrivingFaults: drivingFaultLimit(route.lengthM),
       simulated: true,
     });
     events.push(...faults);
