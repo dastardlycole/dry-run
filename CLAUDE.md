@@ -32,7 +32,7 @@ Use the name in the first column for `/rename`. Tick off when committed. Times a
 | — | **checkpoint** | Everything above working end to end? If not, fix only that | — | Sat 18:00 |
 | 8b | `world-look` | Trailhead-style world built from open data: sky and shadows, textured roads with kerbs, brick buildings with roofs, windows and shop fronts, trees and parks (`npm run scenery -w tools`), lamps, walls, hedges, zebras, a hatchback with L plates. Google 3D Tiles were tried and dropped (blurry at street level) | ✅ done | — |
 | 9 | `hybrid-search` | Atlas Search + `$rankFusion` + `$rerank` for the debrief's guidance (learner-facing, not the instructor search), over all Highway Code rules 103–203 tagged by keyword | ✅ done (`npm run guidance-check -w tools`) | Sat 19:30 |
-| 10 | `saint-or-live` | Gemini Live "tell me" question (no Saint seat): `GET /api/live-token`, push-to-talk on T, wrong answer = R15 | Built, tests pass; voice run waits on the Gemini spending cap | Sat 21:00 |
+| 10 | `saint-or-live` | Gemini Live "tell me" question (no Saint seat): `GET /api/live-token`, push-to-talk on T, wrong answer = R15 | ✅ done: voice run works with the new Gemini key | Sat 21:00 |
 | 10b | `deploy` | Put it online at an https link judges can open: one Node app on Railway (Fastify serves the built client + API), auto-deploy from GitHub, secrets in Railway's Variables, Atlas network access open to anywhere. Build/start/healthcheck are set in Railway's Settings (config-as-code is closed to new services); see [docs/DEPLOY.md](docs/DEPLOY.md) | ✅ done: https://dry-runserver-production.up.railway.app | Sat 21:00 |
 | — | **freeze** | Bug fixes only, rehearse the drive 3 times | — | Sat 21:00 |
 | 11 | `submission` | README, videos, notes per track | Checklist in SPEC §14 | Sun 11:30 |
@@ -43,7 +43,7 @@ Plan and reasons in SPEC §16. The checkpoint build is tagged `checkpoint-2`. Wo
 
 | # | Session name | What it covers | Check |
 |---|---|---|---|
-| 12 | `early-finish` | Ending before the route is done is "test not finished", not a pass | Test: Enter at 0 mph → not a pass |
+| 12 | `early-finish` | Ending before the route is done is "test not finished", not a pass | ✅ done: Enter at 0 mph → "Test not finished" (UNFINISHED in Atlas); also on `main` |
 | 13 | `observation-rules` | R7 junction observation + moving off safely (mirrors and blind spot) | Rule tests with recorded traces |
 | 14 | `auto-routes` | Build test-style loops from the road graph (roundabout + lights + give-way), 3+ per centre | Routes build and drive end to end |
 | 15 | `mock-test` | Route picker + "surprise me", silent examiner, independent-driving stretch, fault limit scaled to drive length | A full mock test on a random route |
