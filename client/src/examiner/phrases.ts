@@ -10,6 +10,8 @@ export const OPENING = "Follow the road ahead unless traffic signs direct you ot
 /** Said when the drive ends (SPEC §4.5 FR-E2), as a real examiner says it. */
 export const END_PASS = "That's the end of your test. I'm pleased to tell you that you've passed.";
 export const END_FAIL = "That's the end of your test. I'm sorry to tell you that you haven't passed.";
+/** Said when the learner ends the test before the end of the route. */
+export const END_UNFINISHED = "We'll stop the test there. As we didn't finish the route, there's no result this time.";
 
 export interface Direction {
   stepId: string;
@@ -77,5 +79,5 @@ export function routeDirections(route: Pick<Route, 'steps'>): Direction[] {
 
 /** Every sentence the examiner can say on this route (for pre-generating audio). */
 export function allPhrases(route: Pick<Route, 'steps'>): string[] {
-  return [...new Set([OPENING, ...routeDirections(route).map((d) => d.text), END_PASS, END_FAIL])];
+  return [...new Set([OPENING, ...routeDirections(route).map((d) => d.text), END_PASS, END_FAIL, END_UNFINISHED])];
 }

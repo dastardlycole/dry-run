@@ -1,9 +1,10 @@
+import Fastify from 'fastify';
 import { MongoClient, type Db } from 'mongodb';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FaultEvent } from '../../client/src/faults/types';
 import { buildApp } from './app';
-import { ensureIndexes } from './sessions';
+import { ensureIndexes, sessionRoutes } from './sessions';
 
 // The session and fault endpoints against a throwaway in-memory MongoDB, so tests never touch Atlas.
 
@@ -52,7 +53,7 @@ const event = (n: number, category: FaultEvent['category'] = 'driving', over: Pa
 });
 const send = (events: unknown[]) => app.inject({ method: 'POST', url: '/api/events', payload: { events } });
 const end = (id = 'sess-1') =>
-  app.inject({ method: 'POST', url: `/api/sessions/${id}/end`, payload: { endedAt: '2026-10-24T10:05:00.000Z' } });
+  app.inject({ method: 'POST', url: `/api/sessions/${id}/end`, payload: { endedAt: '2026-10-24T10:05:00.000Z', finished: true } });
 
 describe('POST /api/sessions', () => {
   it('creates the session (and learner), and a repeat changes nothing', async () => {
@@ -151,6 +152,36 @@ describe('POST /api/sessions/:id/end', () => {
     });
     expect(res.statusCode).toBe(400);
     expect((await end()).json().result).toBe('FAIL');
+  });
+
+  const endWith = (body: object) =>
+    app.inject({ method: 'POST', url: '/api/sessions/sess-1/end', payload: { endedAt: '2026-10-24T10:05:00.000Z', ...body } });
+
+  it('saves a test ended early (Enter) or reset part-way (R) as UNFINISHED, never PASS', async () => {
+    // No flag at all (an old client, a hand-made request) is never taken as finished.
+    for (const body of [{ finished: false }, { abandoned: true }, {}, { finished: true, abandoned: true }]) {
+      expect((await endWith(body)).json()).toEqual({ sessionId: 'sess-1', result: 'UNFINISHED', counts: { driving: 0, serious: 0, dangerous: 0 } });
+      expect(await db.collection('sessions').findOne({ _id: 'sess-1' as never })).toMatchObject({ result: 'UNFINISHED' });
+    }
+  });
+
+  it('keeps the faults of an unfinished test', async () => {
+    await send([event(1, 'serious')]);
+    expect((await endWith({ finished: false })).json()).toMatchObject({ result: 'UNFINISHED', counts: { driving: 0, serious: 1, dangerous: 0 } });
+  });
+
+  it("asks for the examiner's summary after a finished or ended-early test, not after a reset", async () => {
+    const ended: string[] = [];
+    const hooked = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
+    sessionRoutes(hooked, async () => db, { sessionEnded: (id) => ended.push(id) });
+    const endIt = (body: object) =>
+      hooked.inject({ method: 'POST', url: '/api/sessions/sess-1/end', payload: { endedAt: '2026-10-24T10:05:00.000Z', ...body } });
+    await endIt({ finished: true });
+    await endIt({ finished: false });
+    expect(ended).toEqual(['sess-1', 'sess-1']);
+    await endIt({ abandoned: true });
+    expect(ended).toHaveLength(2);
+    await hooked.close();
   });
 
   it('is 404 for an unknown session', async () => {

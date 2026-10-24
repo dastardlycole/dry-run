@@ -144,15 +144,17 @@ describe('Sync', () => {
     expect(server.calls.map((c) => c.url)).toEqual(['/api/sessions', '/api/events']);
   });
 
-  it('an abandoned end (reset part-way) says so; a normal end does not', async () => {
+  it('says how the test ended: reset part-way, ended early, or finished', async () => {
     const server = fakeServer();
     const sync = new Sync(server.fetch);
-    sync.endSession('s', '2026-10-24T10:05:00.000Z', true);
+    sync.endSession('s', '2026-10-24T10:05:00.000Z', 'abandoned');
+    sync.endSession('u', '2026-10-24T10:05:30.000Z', 'unfinished');
     sync.endSession('t', '2026-10-24T10:06:00.000Z');
     await sync.flush();
     expect(server.calls.map((c) => c.body)).toEqual([
       { endedAt: '2026-10-24T10:05:00.000Z', abandoned: true },
-      { endedAt: '2026-10-24T10:06:00.000Z' },
+      { endedAt: '2026-10-24T10:05:30.000Z', finished: false },
+      { endedAt: '2026-10-24T10:06:00.000Z', finished: true },
     ]);
   });
 });

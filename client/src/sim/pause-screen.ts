@@ -1,4 +1,4 @@
-import { resultOf, type Counts } from '../faults/result';
+import { wouldFail, type Counts } from '../faults/result';
 import { clock, DebriefView, el, type ResultFault } from './fault-list';
 
 // The pause screen (Esc): a game-style look at the test so far. A stats strip (time, faults by category, on
@@ -22,7 +22,7 @@ export class PauseScreen {
       box.append(el('b', '', String(counts[c])), el('span', '', c));
       stats.append(box);
     }
-    const passing = resultOf(counts) === 'PASS';
+    const passing = !wouldFail(counts);
     const course = el('div', `stat course ${passing ? 'pass' : 'fail'}`);
     course.append(el('b', '', passing ? 'On course' : 'Fail'), el('span', '', passing ? 'to pass' : 'if this were the test'));
     stats.append(course);
