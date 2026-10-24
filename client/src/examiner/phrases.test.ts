@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import route from '../../../assets/wanstead/route-demo.json';
 import type { Route, RouteStep } from '../world/types';
-import { allPhrases, OPENING, phraseFor, routeDirections } from './phrases';
+import { allPhrases, END_FAIL, END_PASS, OPENING, phraseFor, routeDirections } from './phrases';
 
 const step = (s: Partial<RouteStep>): RouteStep => ({
   id: 's',
@@ -75,5 +75,9 @@ describe('demo route directions', () => {
     const all = allPhrases(route as Route);
     expect(all[0]).toBe(OPENING);
     expect(new Set(all).size).toBe(all.length);
+  });
+
+  it('includes both spoken results, so they get cached audio', () => {
+    expect(allPhrases(route as Route)).toEqual(expect.arrayContaining([END_PASS, END_FAIL]));
   });
 });

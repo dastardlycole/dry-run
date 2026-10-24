@@ -7,6 +7,10 @@ import type { Route, RouteStep } from '../world/types';
 
 export const OPENING = "Follow the road ahead unless traffic signs direct you otherwise. When you're ready, drive on.";
 
+/** Said when the drive ends (SPEC §4.5 FR-E2), as a real examiner says it. */
+export const END_PASS = "That's the end of your test. I'm pleased to tell you that you've passed.";
+export const END_FAIL = "That's the end of your test. I'm sorry to tell you that you haven't passed.";
+
 export interface Direction {
   stepId: string;
   /** Distance along the route of the manoeuvre the direction is for. */
@@ -73,5 +77,5 @@ export function routeDirections(route: Pick<Route, 'steps'>): Direction[] {
 
 /** Every sentence the examiner can say on this route (for pre-generating audio). */
 export function allPhrases(route: Pick<Route, 'steps'>): string[] {
-  return [...new Set([OPENING, ...routeDirections(route).map((d) => d.text)])];
+  return [...new Set([OPENING, ...routeDirections(route).map((d) => d.text), END_PASS, END_FAIL])];
 }

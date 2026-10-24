@@ -37,6 +37,8 @@ export interface CollisionPoint {
 export interface JunctionStatsResponse {
   /** When junction_stats last changed, or null if it is empty. */
   updatedAt: string | null;
+  /** Seeded demo tests (tools/src/seed-demo.ts) included in the counts. */
+  simulatedSessions: number;
   junctions: JunctionStat[];
   collisions: CollisionPoint[];
 }

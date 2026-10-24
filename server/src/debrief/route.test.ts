@@ -1,6 +1,6 @@
 import { MongoClient, type Db } from 'mongodb';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FaultEvent } from '../../../client/src/faults/types';
 import type { DebriefLine } from '../../../client/src/net/debrief';
 import { buildApp } from '../app';
@@ -51,6 +51,8 @@ const findGuidance = (d: Db): FindGuidance => (f) => d.collection<GuidanceChunk>
 
 const app = buildApp(async () => db, { debrief: { findGuidance, ai } });
 const noGemini = buildApp(async () => db);
+/** Fake TTS: the "audio" is the text it was given, so tests can see what was voiced. */
+let spoken: string[] = [];
 
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create();
@@ -112,6 +114,7 @@ beforeEach(async () => {
   summaryCalls = [];
   delayMs = 0;
   running = mostRunning = 0;
+  spoken = [];
   await db.collection<GuidanceChunk>('guidance_chunks').insertMany([chunk('hc-161', ['R3', 'R4']), chunk('hc-175', ['R2'])]);
   await db.collection<{ _id: string }>('junctions').insertOne({
     _id: 'osm-node-1',
@@ -145,7 +148,7 @@ describe('background debrief while driving', () => {
         faultId: 'sess-1:1',
         text: 'About sess-1:1.',
         citations: [{ id: 'hc-161', title: 'Rule hc-161', url: 'https://www.gov.uk/x#hc-161' }],
-        junction: { name: 'Eastern Avenue roundabout', sessionsThrough: 1, sessionsWithFault: 1, collisions: 14, collisionsSince: '2020-01-04T00:00:00.000Z' },
+        junction: { name: 'Eastern Avenue roundabout', sessionsThrough: 1, simulatedThrough: 0, sessionsWithFault: 1, collisions: 14, collisionsSince: '2020-01-04T00:00:00.000Z' },
         temporary: false,
       },
     ]);
@@ -220,7 +223,8 @@ describe('end of the test', () => {
     const before = explainCalls.length;
     const { faults, summary, lines } = await get();
     expect(explainCalls.length + summaryCalls.length).toBe(before + 1);
-    expect(faults.map((l) => l.faultId)).toEqual(['sess-1:1', 'sess-1:2']);
+    // In the order they're ready, which can be either.
+    expect(faults.map((l) => l.faultId).sort()).toEqual(['sess-1:1', 'sess-1:2']);
     expect(summary).toEqual({ kind: 'summary', text: 'Work on your mirrors.', citations: [{ id: 'hc-161', title: 'Rule hc-161', url: 'https://www.gov.uk/x#hc-161' }] });
     expect(lines.at(-1)).toEqual({ kind: 'done', unavailable: false });
   });
@@ -277,6 +281,45 @@ describe('GET /api/sessions/:id/debrief', () => {
 
   it('404 for an unknown session', async () => {
     expect((await get(app, 'nope')).res.statusCode).toBe(404);
+  });
+});
+
+describe('GET /api/sessions/:id/summary-audio', () => {
+  // A new app each time: clips are kept in memory, by session id.
+  let withVoice: ReturnType<typeof buildApp>;
+  beforeEach(() => {
+    withVoice = buildApp(async () => db, {
+      debrief: { findGuidance, ai },
+      speak: async (text) => (spoken.push(text), Buffer.from(`RIFF:${text}`)),
+    });
+  });
+  afterEach(() => withVoice.close());
+  const audio = (a: ReturnType<typeof buildApp> = withVoice, sid = 'sess-1') => a.inject({ method: 'GET', url: `/api/sessions/${sid}/summary-audio` });
+
+  it('voices the summary as soon as the test ends, once, and serves it as WAV', async () => {
+    script = { 'sess-1:1': [good('sess-1:1')], summary: [goodSummary] };
+    await saveFaults([event(1)], withVoice);
+    await endSession(withVoice);
+    await vi.waitFor(() => expect(spoken).toEqual(['Work on your mirrors.']));
+    const res = await audio();
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toBe('audio/wav');
+    expect(res.payload).toBe('RIFF:Work on your mirrors.');
+    await audio();
+    expect(spoken).toHaveLength(1);
+  });
+
+  it('404 when there is no summary (no faults, or not ended), and asking again later can still work', async () => {
+    expect((await audio()).statusCode).toBe(404);
+    expect((await audio(withVoice, 'nope')).statusCode).toBe(404);
+    script = { 'sess-1:1': [good('sess-1:1')], summary: [goodSummary] };
+    await saveFaults([event(1)], withVoice);
+    await endSession(withVoice);
+    expect((await audio()).statusCode).toBe(200);
+  });
+
+  it('503 without Gemini TTS', async () => {
+    expect((await audio(app)).statusCode).toBe(503);
   });
 });
 

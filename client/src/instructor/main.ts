@@ -98,7 +98,8 @@ async function poll() {
     (map.getSource('collisions') as maplibregl.GeoJSONSource).setData(collisionFeatures(latest));
     const total = latest.junctions.reduce((n, j) => n + j.faults, 0);
     const when = latest.updatedAt ? `last fault ${new Date(latest.updatedAt).toLocaleTimeString()}` : 'no faults yet';
-    status.textContent = `${total} faults · ${when}`;
+    const sim = latest.simulatedSessions ? ` · includes ${latest.simulatedSessions} simulated tests` : '';
+    status.textContent = `${total} faults · ${when}${sim}`;
   } catch {
     status.textContent = 'Server unreachable, retrying…';
   } finally {

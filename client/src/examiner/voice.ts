@@ -2,7 +2,16 @@ import { speechSeconds } from './director';
 
 // The examiner's voice (SPEC §4.5 FR-E1): pre-made Gemini TTS audio from /audio (tools/src/gen-tts.ts),
 // or the browser's own speech when a sentence has no file. Nothing here ever makes driving wait:
-// `say` returns at once and sentences play one after another in the background.
+// `say` returns at once and sentences play one after another in the background. `sayAudio` plays audio made
+// on the fly instead (the examiner's summary, from the server).
+
+/** A sentence to say, with its own audio when it isn't one of the cached files. */
+interface Line {
+  text: string;
+  audio?: ArrayBuffer;
+  /** Shown as a caption (short directions); a long summary already on screen isn't. */
+  caption: boolean;
+}
 
 /** /audio/manifest.json: sentence → file name in /audio. */
 export type AudioManifest = Record<string, string>;
@@ -11,7 +20,7 @@ export class Voice {
   private ctx: AudioContext | null = null;
   private manifest: AudioManifest = {};
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
-  private queue: string[] = [];
+  private queue: Line[] = [];
   private busy = false;
   /** Bumped by stop(), so a sentence still loading when the car is reset doesn't play afterwards. */
   private generation = 0;
@@ -38,7 +47,22 @@ export class Voice {
   }
 
   say(text: string) {
-    this.queue.push(text);
+    this.queue.push({ text, caption: true });
+    if (!this.busy) this.playNext();
+  }
+
+  /**
+   * Says `text` using this audio (any format the browser decodes), or the browser's voice if it won't decode.
+   * No caption: it's for text that's already on screen.
+   */
+  sayAudio(text: string, audio: ArrayBuffer) {
+    this.queue.push({ text, audio, caption: false });
+    if (!this.busy) this.playNext();
+  }
+
+  /** The browser's voice only, with no caption: for text that's already on screen and has no audio. */
+  sayUncaptioned(text: string) {
+    this.queue.push({ text, caption: false });
     if (!this.busy) this.playNext();
   }
 
@@ -80,11 +104,12 @@ export class Voice {
   }
 
   private async playNext() {
-    const text = this.queue.shift();
-    if (text === undefined) {
+    const line = this.queue.shift();
+    if (line === undefined) {
       this.busy = false;
       return;
     }
+    const { text, audio, caption } = line;
     this.busy = true;
     const gen = this.generation;
     const done = () => {
@@ -92,13 +117,17 @@ export class Voice {
     };
     const ctx = this.audio();
     let buf: AudioBuffer | null = null;
-    if (this.manifest[text] && ctx) {
+    if ((audio || this.manifest[text]) && ctx) {
       if (ctx.state !== 'running') await withTimeout(ctx.resume(), 300);
-      // Only use the file if it's already decoded or about to be: a slow download falls back to speech.
-      if (ctx.state === 'running') buf = await withTimeout(this.buffer(text), 300);
+      if (ctx.state === 'running') {
+        // Only use the file if it's already decoded or about to be: a slow download falls back to speech.
+        buf = audio
+          ? await withTimeout(ctx.decodeAudioData(audio).catch(() => null), 1000)
+          : await withTimeout(this.buffer(text), 300);
+      }
     }
     if (gen !== this.generation) return;
-    this.onSpeak(text);
+    if (caption) this.onSpeak(text);
     if (buf && ctx) {
       const src = ctx.createBufferSource();
       src.buffer = buf;

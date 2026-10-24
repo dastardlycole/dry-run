@@ -11,7 +11,8 @@
     "gen-tts": "tsx src/gen-tts.ts",
     "import-stats19": "tsx src/import-stats19.ts",
     "stream": "tsx src/stream-setup.ts",
-    "ingest-guidance": "tsx src/ingest-guidance.ts"
+    "ingest-guidance": "tsx src/ingest-guidance.ts",
+    "seed-demo": "tsx src/seed-demo.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.4.0",

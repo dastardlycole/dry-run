@@ -1,5 +1,6 @@
 import { MongoClient } from 'mongodb';
 import './env';
+import { rebuildJunctionStats } from './stream/backfill';
 import { junctionStatsPipeline, PROCESSOR_NAME } from './stream/junction-stats';
 
 // Creates, starts and checks the junctionStats stream processor (SPEC §8), sending the same commands
@@ -17,22 +18,7 @@ const action = process.argv[2] ?? 'create';
 if (action === 'backfill') {
   const cluster = await MongoClient.connect(process.env.MONGODB_URI ?? '', { appName: 'dry-run-stream-setup' });
   try {
-    const db = cluster.db(DB);
-    await db.collection('junction_stats').deleteMany({});
-    await db
-      .collection('fault_events')
-      .aggregate([
-        {
-          $group: {
-            _id: { centreId: '$centreId', junctionId: '$junctionId', ruleId: '$ruleId', category: '$category' },
-            faults: { $sum: 1 },
-            lastUpdated: { $max: '$ts' },
-          },
-        },
-        { $merge: { into: 'junction_stats', on: '_id', whenMatched: 'replace', whenNotMatched: 'insert' } },
-      ])
-      .toArray();
-    console.log(`junction_stats rebuilt: ${await db.collection('junction_stats').countDocuments()} docs`);
+    console.log(`junction_stats rebuilt: ${await rebuildJunctionStats(cluster.db(DB))} docs`);
   } finally {
     await cluster.close();
   }

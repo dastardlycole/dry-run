@@ -76,9 +76,10 @@ export async function* asCompleted<T, R>(items: T[], fn: (t: T) => Promise<R>): 
 async function junctionFacts(db: Db, centreId: string, faults: FaultDoc[]): Promise<Map<string, JunctionFacts>> {
   const ids = [...new Set(faults.map((f) => f.junctionId))];
   if (!ids.length) return new Map();
-  const [docs, perRoute, withFault] = await Promise.all([
+  const [docs, perRoute, simPerRoute, withFault] = await Promise.all([
     db.collection<JunctionDoc>('junctions').find({ _id: { $in: ids } }).toArray(),
     sessionsPerRoute(db, centreId),
+    sessionsPerRoute(db, centreId, true),
     sessionsWithFault(db, { centreId, junctionId: { $in: ids } }),
   ]);
   return new Map(
@@ -87,6 +88,7 @@ async function junctionFacts(db: Db, centreId: string, faults: FaultDoc[]): Prom
       {
         name: j.name,
         sessionsThrough: sessionsThrough(j.routeIds, perRoute),
+        simulatedThrough: sessionsThrough(j.routeIds, simPerRoute),
         sessionsWithFault: withFault.get(j._id) ?? 0,
         collisions: j.collisions?.total ?? 0,
         collisionsSince: j.collisions?.since ? j.collisions.since.toISOString() : null,

@@ -2,7 +2,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 import { CENTRE } from '../config';
 import { Director } from '../examiner/director';
-import { routeDirections } from '../examiner/phrases';
+import { END_FAIL, END_PASS, routeDirections } from '../examiner/phrases';
 import { PullUp } from '../examiner/pullup';
 import { Voice } from '../examiner/voice';
 import { FaultEngine, toFaultEvent, type SessionInfo } from '../faults/engine';
@@ -10,6 +10,7 @@ import { speedLimitAt } from '../faults/limits';
 import { countFaults, resultOf } from '../faults/result';
 import { RULE_NAMES, type Contact, type Fault, type Frame } from '../faults/types';
 import { streamDebrief } from '../net/debrief';
+import { fetchSummaryAudio } from '../net/summary-audio';
 import { Sync } from '../net/sync';
 import { GuideArrows, LightHeads, loadRoute, routeLinesMesh } from '../world/furniture';
 import { buildSiteLights, signalSites, TrafficLights } from '../world/lights';
@@ -172,7 +173,9 @@ function endDrive() {
   if (paused) setPaused(false);
   voice.stop();
   const counts = countFaults(found.map((f) => f.fault));
-  resultScreen.show(resultOf(counts), counts, foundRows());
+  const result = resultOf(counts);
+  resultScreen.show(result, counts, foundRows());
+  voice.say(result === 'PASS' ? END_PASS : END_FAIL);
   sync.endSession(session.sessionId, new Date().toISOString());
   showSaveState();
 }
@@ -191,16 +194,32 @@ sync.onSaved = (saved) => {
 
 /** The examiner's debrief, asked for once the server has the whole test. The result screen is already up. */
 function showDebrief(sessionId: string) {
-  if (found.length && resultScreen.debrief) streamDebriefInto(resultScreen.debrief, sessionId);
+  if (found.length && resultScreen.debrief) streamDebriefInto(resultScreen.debrief, sessionId, { onSummary: (text, signal) => saySummary(sessionId, text, signal) });
+}
+
+/** Reads the summary out after the result, in the Gemini voice if its audio comes in time, else the browser's. */
+function saySummary(sessionId: string, text: string, signal: AbortSignal) {
+  void fetchSummaryAudio(sessionId, signal).then((audio) => {
+    // R was pressed (or another stream started) while it was on its way.
+    if (signal.aborted) return;
+    if (audio) voice.sayAudio(text, audio);
+    else voice.sayUncaptioned(text);
+  });
 }
 
 /**
  * Streams the debrief into the pause or result screen, stopping any earlier stream. Most of it is already
- * written: the server explains each fault in the background as soon as it's saved. `first` runs before asking.
+ * written: the server explains each fault in the background as soon as it's saved. `first` runs before asking;
+ * `onSummary` gets the examiner's summary once, with a signal that says when the stream was stopped.
  */
-function streamDebriefInto(view: DebriefView, sessionId: string, first?: () => Promise<void>) {
+function streamDebriefInto(
+  view: DebriefView,
+  sessionId: string,
+  { first, onSummary }: { first?: () => Promise<void>; onSummary?: (text: string, signal: AbortSignal) => void } = {},
+) {
   debriefAbort?.abort();
   const abort = (debriefAbort = new AbortController());
+  let hadSummary = false;
   view.started();
   void (async () => {
     await first?.();
@@ -214,6 +233,11 @@ function streamDebriefInto(view: DebriefView, sessionId: string, first?: () => P
         (line) => {
           if (line.kind === 'done') unavailable = line.unavailable;
           else view.set(line);
+          // A retry round sends the summary again; it's only read out once.
+          if (line.kind === 'summary' && !hadSummary) {
+            hadSummary = true;
+            onSummary?.(line.text, abort.signal);
+          }
         },
         abort.signal,
       );
@@ -246,7 +270,7 @@ function setPaused(on: boolean) {
   }
   pauseScreen.show(simTime, countFaults(found.map((f) => f.fault)), foundRows());
   const s = session;
-  if (s && found.length && pauseScreen.debrief) streamDebriefInto(pauseScreen.debrief, s.sessionId, () => sendNow(s.sessionId));
+  if (s && found.length && pauseScreen.debrief) streamDebriefInto(pauseScreen.debrief, s.sessionId, { first: () => sendNow(s.sessionId) });
 }
 sync.onFailed = (id) => {
   if (session?.sessionId === id && resultScreen.visible) resultScreen.setSave("Couldn't save this test: the server refused it.");
@@ -310,6 +334,9 @@ renderer.setAnimationLoop((now: number) => {
       found = [];
       contacts.clear();
       trace.length = 0;
+      // Each drive's clock (the pause screen's time driven, fault times) and the light cycle start again.
+      simTime = 0;
+      acc = 0;
       // Reset while paused: the pause screen starts afresh too.
       if (paused) setPaused(true);
     } else if (!paused) indicator = toggleIndicator(indicator, action === 'indicateLeft' ? 'left' : 'right');

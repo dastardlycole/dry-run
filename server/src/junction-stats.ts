@@ -45,11 +45,14 @@ export async function sessionsWithFault(db: Db, match: Record<string, unknown>):
   return new Map(rows.map((x) => [x._id, x.n]));
 }
 
-/** How many sessions there have been on each route at a centre. */
-export async function sessionsPerRoute(db: Db, centreId: string): Promise<Map<string, number>> {
+/** How many sessions there have been on each route at a centre (`simulated`: only the seeded ones). */
+export async function sessionsPerRoute(db: Db, centreId: string, simulated = false): Promise<Map<string, number>> {
   const rows = await db
     .collection('sessions')
-    .aggregate<{ _id: string; n: number }>([{ $match: { centreId } }, { $group: { _id: '$routeId', n: { $sum: 1 } } }])
+    .aggregate<{ _id: string; n: number }>([
+      { $match: { centreId, ...(simulated ? { simulated: true } : {}) } },
+      { $group: { _id: '$routeId', n: { $sum: 1 } } },
+    ])
     .toArray();
   return new Map(rows.map((x) => [x._id, x.n]));
 }
@@ -72,11 +75,12 @@ export function junctionStatsRoutes(app: FastifyInstance, getDb: () => Promise<D
       if (ruleId) statFilter['_id.ruleId'] = eventFilter.ruleId = ruleId;
       if (category) statFilter['_id.category'] = eventFilter.category = category;
 
-      const [stats, latest, withFault, perRoute, collisions] = await Promise.all([
+      const [stats, latest, withFault, perRoute, simPerRoute, collisions] = await Promise.all([
         db.collection<StatDoc>('junction_stats').find(statFilter).toArray(),
         db.collection<StatDoc>('junction_stats').find({ '_id.centreId': centreId }).sort({ lastUpdated: -1 }).limit(1).toArray(),
         sessionsWithFault(db, eventFilter),
         sessionsPerRoute(db, centreId),
+        sessionsPerRoute(db, centreId, true),
         db
           .collection<{ _id: string; date: Date; severity: Severity; location: { coordinates: [number, number] } }>('collisions')
           .find({ centreId }, { projection: { date: 1, severity: 1, location: 1 } })
@@ -126,7 +130,8 @@ export function junctionStatsRoutes(app: FastifyInstance, getDb: () => Promise<D
         date: c.date.toISOString(),
       }));
 
-      return { updatedAt: latest[0]?.lastUpdated?.toISOString() ?? null, junctions, collisions: points };
+      const simulatedSessions = [...simPerRoute.values()].reduce((a, b) => a + b, 0);
+      return { updatedAt: latest[0]?.lastUpdated?.toISOString() ?? null, simulatedSessions, junctions, collisions: points };
     },
   );
 }

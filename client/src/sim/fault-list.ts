@@ -30,12 +30,13 @@ export const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = ''
 
 export const clock = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
-/** e.g. "2 of 5 tests here had a fault · 14 reported collisions here since 2020". */
+/** e.g. "9 of 25 tests here had a fault (24 simulated) · 14 reported collisions here since 2020". */
 export function junctionLine(j: Extract<DebriefLine, { kind: 'fault' }>['junction']): string {
   if (!j) return '';
   const parts: string[] = [];
   if (j.sessionsThrough >= MIN_SESSIONS_FOR_RATE) {
-    parts.push(`${Math.min(j.sessionsWithFault, j.sessionsThrough)} of ${j.sessionsThrough} tests here had a fault`);
+    const sim = j.simulatedThrough > 0 ? ` (${j.simulatedThrough} simulated)` : '';
+    parts.push(`${Math.min(j.sessionsWithFault, j.sessionsThrough)} of ${j.sessionsThrough} tests here had a fault${sim}`);
   }
   if (j.collisions > 0) {
     const since = j.collisionsSince ? ` since ${new Date(j.collisionsSince).getUTCFullYear()}` : '';

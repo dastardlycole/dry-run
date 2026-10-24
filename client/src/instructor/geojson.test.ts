@@ -4,6 +4,7 @@ import type { JunctionStatsResponse } from './types';
 
 const r: JunctionStatsResponse = {
   updatedAt: null,
+  simulatedSessions: 0,
   junctions: [
     {
       id: 'rbt',

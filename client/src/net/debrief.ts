@@ -13,6 +13,8 @@ export interface Citation {
 export interface JunctionFacts {
   name: string;
   sessionsThrough: number;
+  /** How many of those are seeded demo tests, not real drives. */
+  simulatedThrough: number;
   sessionsWithFault: number;
   collisions: number;
   /** ISO date of the earliest collision counted. */

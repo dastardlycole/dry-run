@@ -153,6 +153,6 @@ describe('GET /api/junctions/stats', () => {
 
   it('works on an empty database', async () => {
     await db.dropDatabase();
-    expect(await get()).toEqual({ updatedAt: null, junctions: [], collisions: [] });
+    expect(await get()).toEqual({ updatedAt: null, simulatedSessions: 0, junctions: [], collisions: [] });
   });
 });
