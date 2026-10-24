@@ -47,7 +47,7 @@ Plan and reasons in SPEC §16. The checkpoint build is tagged `checkpoint-2`. Wo
 |---|---|---|---|
 | 12 | `early-finish` | Ending before the route is done is "test not finished", not a pass | ✅ done: Enter at 0 mph → "Test not finished" (UNFINISHED in Atlas); also on `main` |
 | 13 | `observation-rules` | R7 junction observation + moving off safely (mirrors and blind spot) | ✅ done: R7 at give-ways/roundabouts (Q+E, roundabout E only), R8 moving off (M+E); rule tests + debrief cites real rules |
-| 14 | `auto-routes` | Build test-style loops from the road graph (roundabout + lights + give-way), 3+ per centre | Routes build and drive end to end |
+| 14 | `auto-routes` | Build test-style loops from the road graph (roundabout + lights + give-way), 3+ per centre | ✅ done: 4 full routes at Wanstead (`?route=auto-1`…`auto-4`), `npm run route-build -w tools`; falls back to fewer junction kinds on odd maps |
 | 22 | `any-centre` | Type a centre or postcode; server builds area + routes and caches them (Overture buildings, tree heights) | A second centre drivable with no hand work |
 | 15 | `mock-test` | Route picker + "surprise me", silent examiner, independent-driving stretch, fault limit scaled to drive length | A full mock test on a random route |
 | — | **midnight cut line** | Done by midnight 24 Oct. If `any-centre` isn't working by ~22:30, use plan B: pre-build 2–3 centres and the postcode box picks the nearest | — |
@@ -63,6 +63,7 @@ Plan and reasons in SPEC §16. The checkpoint build is tagged `checkpoint-2`. Wo
 - Add an accelerometer and move the turn signal indicator to a better spot on screen.
 - The examiner's voice changes between sentences (sounds like a different person). Likely cause: sentences without cached Gemini TTS fall back to the browser voice; new routes need `npm run gen-tts -w tools`. Also make the fallback voice match (same gender).
 - Light engine rev sounds.
+- AI examiner panel: a small box top right showing the examiner's latest note; Esc (pause screen) expands it to show the full explanations.
 
 ## Project notes
 

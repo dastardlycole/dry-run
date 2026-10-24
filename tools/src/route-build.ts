@@ -27,9 +27,9 @@ const save = (route: Route) => {
 };
 
 save(buildRoute(world, WANSTEAD_DEMO));
-// Old generated routes go first, so a map that now makes fewer routes doesn't keep stale ones.
-for (const f of readdirSync(dir)) if (/^route-auto-\d+\.json$/.test(f)) rmSync(resolve(dir, f));
 // Generated loops start where the demo does: outside the test centre.
 const autos = autoRoutes(world, { start: WANSTEAD_DEMO.waypoints[0] });
+// Only once the new ones are built: clear old ones, so a map that now makes fewer doesn't keep stale ones.
+for (const f of readdirSync(dir)) if (/^route-auto-\d+\.json$/.test(f)) rmSync(resolve(dir, f));
 for (const a of autos) save(a.route);
 if (autos.length < 3) console.warn(`WARNING: only ${autos.length} generated routes (want 3+)`);

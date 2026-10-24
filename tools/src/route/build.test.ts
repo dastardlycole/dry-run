@@ -336,3 +336,12 @@ describe('generated routes', () => {
     }
   }, 60_000);
 });
+
+describe('routes given as a path', () => {
+  it('refuses a path with a gap in it', () => {
+    const world = makeWorld(T_POS, T_WAYS);
+    const edge = (from: string, to: string) => world.graph.edges.find((e) => e.from === from && e.to === to)!.id;
+    expect(() => buildRoute(world, { ...def(['W', 'S']), path: [edge('W', 'J'), edge('J', 'S')] })).not.toThrow();
+    expect(() => buildRoute(world, { ...def(['W', 'S']), path: [edge('W', 'J'), edge('E', 'J')] })).toThrow(/path breaks/);
+  });
+});

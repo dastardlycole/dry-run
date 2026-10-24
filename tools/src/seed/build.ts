@@ -79,7 +79,7 @@ function chancesAt(s: RouteStep): Chance[] {
 const SPEEDING: Chance[] = [c('R1', 'driving', 0.25, [33, 37], { limitMph: 30 }), c('R1', 'serious', 0.2, [41, 45], { limitMph: 30 })];
 
 /** mulberry32: small, fast, seeded. */
-function rng(seed: number) {
+export function rng(seed: number) {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;

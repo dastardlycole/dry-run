@@ -1,5 +1,6 @@
 import { signalSites } from '../../../client/src/world/lights';
 import type { Edge, Route, StepControl, WorldData } from '../../../client/src/world/types';
+import { rng } from '../seed/build';
 import { buildRoute, controlFor, RoadIndex, turnDeg, type RouteDef } from './build';
 
 // Test-style routes made from the road graph, for any centre (SPEC §16.4 step 3): loops that start and
@@ -172,16 +173,21 @@ export function autoRoutes(world: WorldData, opts: AutoOptions = {}): AutoRoute[
 
   // Each junction to take in, as the waypoints that force the route through it the right way.
   const pools: Record<Feature, string[][]> = { roundabout: [], signals: [], giveway: [] };
+  /** Give-way approaches by their two waypoints, so the leg before can arrive ready to take that exact road. */
+  const approach = new Map<string, Edge>();
   const ordinary = (e: Edge) => !e.roundabout && !idx.isService(e);
   for (const a of world.graph.edges) {
     if (!ordinary(a) || !inReach(a.to)) continue;
     const ring = (idx.out.get(a.to) ?? []).find((e) => e.roundabout);
     if (ring) {
       // In from `a`, round the ring, out along an exit that leaves from a different ring node.
-      for (const exit of ringExits(idx, a.to)) pools.roundabout.push([a.from, a.to, exit.to]);
+      for (const exit of ringExits(idx, a.to)) if (inReach(exit.to)) pools.roundabout.push([a.from, a.to, exit.to]);
     } else {
       const c = controlFor(idx, a, a.to);
-      if (c === 'giveway' || c === 'stop') pools.giveway.push([a.from, a.to]);
+      if (c === 'giveway' || c === 'stop') {
+        pools.giveway.push([a.from, a.to]);
+        approach.set(`${a.from}>${a.to}`, a);
+      }
     }
   }
   for (const s of signalSites(world.junctions)) {
@@ -196,7 +202,7 @@ export function autoRoutes(world: WorldData, opts: AutoOptions = {}): AutoRoute[
     return legs.get(key)!;
   };
 
-  const rand = mulberry32(seed);
+  const rand = rng(seed);
   const pick = <T>(xs: T[]) => xs[Math.floor(rand() * xs.length)];
   const found: Found[] = [];
   const seen = new Set<string>();
@@ -209,7 +215,7 @@ export function autoRoutes(world: WorldData, opts: AutoOptions = {}): AutoRoute[
     for (let t = 0; t < tries; t++) {
       const parts = shuffle(need.map((f) => pick(pools[f])), rand);
       const waypoints = [start, ...parts.flat(), start].filter((w, i, ws) => i === 0 || w !== ws[i - 1]);
-      const key = waypoints.join(',');
+      const key = `${tier}:${waypoints.join(',')}`;
       if (seen.has(key)) continue;
       seen.add(key);
 
@@ -217,7 +223,7 @@ export function autoRoutes(world: WorldData, opts: AutoOptions = {}): AutoRoute[
       let ok = true;
       for (let i = 0; ok && i < waypoints.length - 1; i++) {
         // When the next two waypoints are the ends of one road (a give-way approach), arrive ready to take it.
-        const then = (idx.out.get(waypoints[i + 1]) ?? []).find((e) => e.to === waypoints[i + 2]);
+        const then = approach.get(`${waypoints[i + 1]}>${waypoints[i + 2]}`);
         const p = legFor(edges[edges.length - 1], waypoints[i], waypoints[i + 1], then);
         if (p) edges.push(...p);
         else ok = false;
@@ -230,7 +236,7 @@ export function autoRoutes(world: WorldData, opts: AutoOptions = {}): AutoRoute[
 
       let route: Route;
       try {
-        route = buildRoute(world, { id: 'check', name: '', waypoints, path: edges.map((e) => e.id), parkedCars: 0 });
+        route = buildRoute(world, { id: 'check', name: '', waypoints, path: edges.map((e) => e.id), parkedCars: 0 }, idx);
       } catch {
         continue;
       }
@@ -254,7 +260,7 @@ export function autoRoutes(world: WorldData, opts: AutoOptions = {}): AutoRoute[
       path: f.route.edges,
       parkedCars,
     };
-    return { def, route: buildRoute(world, def), has: f.has };
+    return { def, route: buildRoute(world, def, idx), has: f.has };
   });
 }
 
@@ -368,16 +374,4 @@ function shuffle<T>(xs: T[], rand: () => number): T[] {
     [xs[i], xs[j]] = [xs[j], xs[i]];
   }
   return xs;
-}
-
-/** Small seeded random number generator, so the same map always gives the same routes. */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
