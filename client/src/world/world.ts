@@ -129,7 +129,7 @@ export function buildWorld(data: WorldData, scene: THREE.Scene): StartPose {
   return startPose(data.roads);
 }
 
-function hasPavement(r: Road) {
+export function hasPavement(r: Road) {
   return !NO_PAVEMENT.has(r.highway);
 }
 

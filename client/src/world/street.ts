@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { dashPieces, offsetPolyline, stripTriangles } from './geometry';
 import { along, BoxGrid, distToSegment, insideRing, nearRing, rng } from './scenery';
 import { surface } from './textures';
-import { COLOURS, flatMesh, LAYER, PAVEMENT_M } from './world';
+import { COLOURS, flatMesh, hasPavement, LAYER, PAVEMENT_M } from './world';
 import type { Road, SceneryData, Vec2, WorldData } from './types';
 
 // Street details that make it read as a London suburb (looks only, nothing collides): lamp columns,
@@ -106,6 +106,11 @@ export function streetDetails(world: WorldData, scenery: SceneryData): THREE.Gro
     for (let k = 0; k <= steps; k++) for (const m of mouthGrid.at([a[0] + ((b[0] - a[0]) * k) / steps, a[1] + ((b[1] - a[1]) * k) / steps])) found.add(m);
     return [...found];
   };
+  // A wall runs just behind its own road's pavement; one reaching another road or its pavement (a corner
+  // where two roads meet, or a side road off a bend) would stand across that road. Checked every metre.
+  const onOtherRoad = (p: Vec2, own: Road) =>
+    roadGrid.at(p).some(({ road, a, b }) => road !== own && distToSegment(p, a, b) < road.widthM / 2 + (hasPavement(road) ? PAVEMENT_M : 0));
+  const crossesRoad = (line: Vec2[], own: Road) => [...line, ...along(line, 1)].some((p) => onOtherRoad(p, own));
   const walls: Vec2[][] = [];
   const hedges: Vec2[][] = [];
   for (const road of world.roads) {
@@ -115,7 +120,7 @@ export function streetDetails(world: WorldData, scenery: SceneryData): THREE.Gro
       for (const side of [-1, 1]) {
         const line = offsetPolyline(piece, side * (half + PAVEMENT_M + 0.25));
         const mid = line[Math.floor(line.length / 2)];
-        if (line.some((p) => nearBuilding(p, 1.2)) || inGreen(mid)) continue;
+        if (line.some((p) => nearBuilding(p, 1.2)) || inGreen(mid) || crossesRoad(line, road)) continue;
         (rand() < 0.55 ? walls : hedges).push(line);
       }
     }

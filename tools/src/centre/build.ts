@@ -37,6 +37,8 @@ export const toCentre = (c: CentreInfo): Centre => ({
 /** Builds the centre into `outDir` and returns the route ids made. Throws if no route could be made. */
 export async function buildCentre(info: CentreInfo, outDir: string, log: (line: string) => void = console.log): Promise<string[]> {
   const centre = toCentre(info);
+  // Overture runs alongside the OSM downloads (it never throws; null means OSM buildings only).
+  const overtureDownload = fetchOverture(centre, resolve(DATA_DIR, 'overture', `${centre.id}.geojson`), OVERTURE_LIMIT_MS, log);
   log(stepLine(0));
   const roadsRaw = JSON.parse(await overpass(roadsQuery(centre)));
   log(stepLine(1));
@@ -44,8 +46,13 @@ export async function buildCentre(info: CentreInfo, outDir: string, log: (line: 
 
   log(stepLine(2));
   const world: WorldData = importWorld(roadsRaw, centre);
-  const overture = await fetchOverture(centre, resolve(DATA_DIR, 'overture', `${centre.id}.geojson`), OVERTURE_LIMIT_MS, log);
-  if (overture) log(`Overture: +${addOvertureBuildings(world, overture)} buildings OSM doesn't have`);
+  const overture = await overtureDownload;
+  try {
+    if (overture) log(`Overture: +${addOvertureBuildings(world, overture)} buildings OSM doesn't have`);
+  } catch (err) {
+    world.buildings = world.buildings.filter((b) => b.from !== 'overture');
+    log(`Overture buildings skipped (${(err as Error).message}): OSM buildings only`);
+  }
 
   log(stepLine(3));
   log(worldSummary(world));

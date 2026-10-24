@@ -137,9 +137,14 @@ function outerRings(g: OvertureFeature['geometry']): [number, number][][] {
   return (polys as [number, number][][][]).map((p) => p[0].slice(0, -1));
 }
 
+/** From OSM (or unreadable sources, to be safe): we already have OSM's buildings. */
 const fromOsm = (f: OvertureFeature) => {
-  const s = typeof f.properties.sources === 'string' ? JSON.parse(f.properties.sources) : f.properties.sources ?? [];
-  return (s as { dataset?: string }[]).some((x) => x.dataset === 'OpenStreetMap');
+  try {
+    const s = typeof f.properties.sources === 'string' ? JSON.parse(f.properties.sources) : f.properties.sources ?? [];
+    return (s as { dataset?: string }[]).some((x) => x.dataset === 'OpenStreetMap');
+  } catch {
+    return true;
+  }
 };
 
 /** Height from Overture's height or floors, else our usual 7 m guess (as for an untagged OSM building). */
@@ -198,37 +203,50 @@ export const overtureBbox = (c: Centre) => {
  * Never throws: the map is still fine with OSM buildings only.
  */
 export async function fetchOverture(c: Centre, outFile: string, limitMs: number, log: (line: string) => void): Promise<OvertureFeature[] | null> {
-  mkdirSync(dirname(outFile), { recursive: true });
-  const part = `${outFile}.part`;
-  rmSync(part, { force: true });
-  const cmd = process.env.OVERTURE_CMD || 'overturemaps';
-  const ok = await new Promise<boolean>((resolve) => {
-    let settled = false;
-    const done = (v: boolean, why?: string) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (why) log(why);
-      resolve(v);
-    };
-    // One command line through the shell, so Windows finds overturemaps.exe on the PATH.
-    const args = ['download', `--bbox=${overtureBbox(c)}`, '-f', 'geojson', '--type=building', '-o', `"${part}"`];
-    const child = spawn([cmd, ...args].join(' '), { stdio: 'ignore', shell: true });
-    const timer = setTimeout(() => {
-      done(false, `Overture download took over ${limitMs / 1000} s: OSM buildings only`);
-      child.kill();
-    }, limitMs);
-    child.on('error', () => done(false, 'Overture tool not found (pip install overturemaps): OSM buildings only'));
-    child.on('exit', (code) => done(code === 0, code === 0 ? undefined : `Overture download failed (exit ${code}): OSM buildings only`));
-  });
-  rmSync(`${part}.state`, { force: true });
-  if (!ok || !existsSync(part)) return null;
+  // Its own part file per run: a download stopped for taking too long may still hold an older one open.
+  const part = `${outFile}.${process.pid}.part`;
   try {
-    const features = JSON.parse(readFileSync(part, 'utf8')).features as OvertureFeature[];
+    mkdirSync(dirname(outFile), { recursive: true });
+    const cmd = process.env.OVERTURE_CMD || 'overturemaps';
+    const ok = await new Promise<boolean>((resolve) => {
+      let settled = false;
+      const done = (v: boolean, why?: string) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (why) log(why);
+        resolve(v);
+      };
+      // One command line through the shell, so Windows finds overturemaps.exe on the PATH. With a shell,
+      // a missing tool shows as a failed exit, not an 'error' event.
+      const args = ['download', `--bbox=${overtureBbox(c)}`, '-f', 'geojson', '--type=building', '-o', `"${part}"`];
+      const windows = process.platform === 'win32';
+      const child = spawn([cmd, ...args].join(' '), { stdio: 'ignore', shell: true, detached: !windows });
+      const timer = setTimeout(() => {
+        done(false, `Overture download took over ${limitMs / 1000} s: OSM buildings only`);
+        // Stop the tool itself, not just the shell that started it.
+        if (windows) spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' }).on('error', () => {});
+        else if (child.pid) process.kill(-child.pid);
+      }, limitMs);
+      child.on('error', () => done(false, 'Overture download could not start: OSM buildings only'));
+      child.on('exit', (code) =>
+        done(code === 0, code === 0 ? undefined : `Overture download failed (exit ${code}; is overturemaps installed? pip install overturemaps): OSM buildings only`),
+      );
+    });
+    if (!ok || !existsSync(part)) return null;
+    const features = JSON.parse(readFileSync(part, 'utf8')).features;
+    if (!Array.isArray(features)) throw new Error('no features');
     renameSync(part, outFile);
-    return features;
-  } catch {
-    log('Overture download was unreadable: OSM buildings only');
+    return features as OvertureFeature[];
+  } catch (err) {
+    log(`Overture download unusable (${(err as Error).message}): OSM buildings only`);
     return null;
+  } finally {
+    for (const f of [part, `${part}.state`])
+      try {
+        rmSync(f, { force: true });
+      } catch {
+        // still held by a stopped download; it's ignored next time
+      }
   }
 }

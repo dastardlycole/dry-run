@@ -23,8 +23,8 @@ const file = resolve(dir, 'world.json');
 const world: WorldData = JSON.parse(readFileSync(file, 'utf8'));
 const raw = resolve(DATA_DIR, 'overture', `${world.centre.id}.geojson`);
 
-const features: OvertureFeature[] | null =
-  !fresh && existsSync(raw) ? JSON.parse(readFileSync(raw, 'utf8')).features : await fetchOverture(world.centre, raw, 120_000, console.log);
+const cached = !fresh && existsSync(raw) ? JSON.parse(readFileSync(raw, 'utf8')).features : null;
+const features: OvertureFeature[] | null = Array.isArray(cached) ? cached : await fetchOverture(world.centre, raw, 120_000, console.log);
 if (!features) process.exit(1);
 
 const osm = world.buildings.filter((b) => b.from !== 'overture').length;
