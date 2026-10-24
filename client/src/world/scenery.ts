@@ -9,8 +9,8 @@ import type { GreenKind, SceneryData, Vec2, WorldData } from './types';
 // pavements. Trees are a few generated shapes (ez-tree) drawn many times: full detail near the camera,
 // a lighter version further out, none past the haze.
 
-export async function loadScenery(centreId: string): Promise<SceneryData> {
-  const res = await fetch(`/${centreId}/scenery.json`);
+export async function loadScenery(base: string): Promise<SceneryData> {
+  const res = await fetch(`${base}/scenery.json`);
   if (!res.ok) throw new Error(`scenery.json: HTTP ${res.status} (run npm run scenery -w tools)`);
   return res.json();
 }

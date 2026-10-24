@@ -15,6 +15,8 @@ const KEYWORDS: Partial<Record<RuleId, RegExp[]>> = {
   R4: [/mirrors?|blind spot|look(ing)? (all )?around/, /\bturn|junction|roundabout/],
   R5: [/signal|indicat/, /\bturn|junction|roundabout|exit/],
   R6: [/signal|indicat/, /\bturn|junction|roundabout|exit/],
+  // R7 and R8 are tagged by hand in sources.ts: keywords also caught rules about other people looking or
+  // moving off (residential streets, cyclists at advanced stop lines, zebras).
   R9: [/roundabout/, /\blanes?\b/],
   R11: [/give way|priority|stopping distance|collision|parked|stationary vehicle|leave enough room/],
 };

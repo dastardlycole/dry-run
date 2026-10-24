@@ -3,6 +3,7 @@ import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import type { Db } from 'mongodb';
 import { env } from './env';
+import { Centres, centreRoutes, type CentresDeps } from './centres';
 import { mongoStatus } from './db';
 import { Debriefer, type DebriefDeps } from './debrief/debriefer';
 import { debriefRoutes } from './debrief/route';
@@ -14,18 +15,29 @@ import { sessionRoutes } from './sessions';
 /**
  * The API, given a way to reach the database (Atlas when running, an in-memory one in tests). Without
  * `debrief` (or `speak`, for the spoken summary, or `mintLiveToken`, for the 'tell me' question) there's no Gemini
- * (tests never call it by accident); index.ts passes the real ones. With `clientDir` (the built client, when
+ * (tests never call it by accident); index.ts passes the real ones, and `centres` (finding and building any test
+ * centre). With `clientDir` (the built client, when
  * deployed) the same server also serves the game itself, so one https link has both.
  */
 export function buildApp(
   getDb: () => Promise<Db>,
-  opts: { logger?: boolean; debrief?: DebriefDeps; speak?: Speak; mintLiveToken?: MintToken; clientDir?: string } = {},
+  opts: {
+    logger?: boolean;
+    debrief?: DebriefDeps;
+    speak?: Speak;
+    mintLiveToken?: MintToken;
+    clientDir?: string;
+    centres?: CentresDeps;
+  } = {},
 ) {
   const app = Fastify({
     logger: opts.logger ?? false,
     // Refuse bodies with unknown fields instead of quietly dropping them.
     ajv: { customOptions: { removeAdditional: false } },
   });
+
+  // The map JSON is megabytes, so compress it (registered first, so it covers every route).
+  app.register(fastifyCompress);
 
   app.get('/api/health', async () => ({
     ok: true,
@@ -47,9 +59,9 @@ export function buildApp(
   debriefRoutes(app, getDb, debriefer);
   summaryVoiceRoutes(app, voice);
   liveTokenRoutes(app, opts.mintLiveToken ?? null);
+  if (opts.centres) centreRoutes(app, new Centres(opts.centres, app.log));
   if (opts.clientDir) {
-    // The map JSON is megabytes, so compress it; Vite's /assets/ files have hashed names and never change.
-    app.register(fastifyCompress);
+    // Vite's /assets/ files have hashed names and never change.
     app.register(fastifyStatic, {
       root: opts.clientDir,
       extensions: ['html'], // /instructor as well as /instructor.html

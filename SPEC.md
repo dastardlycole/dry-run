@@ -117,7 +117,8 @@ Submission notes per track: §14.
 | R9 | Roundabout lane | wrong approach lane for exit taken | driving | P0 |
 | R11 | Collision | any contact | dangerous | P0 |
 | R15 | Tell me question | wrong answer to the 'tell me' question (FR-E3), judged by Gemini Live against the official DVSA answer | driving | P1 |
-| R7 | Junction observation | no `Q` and `E` within 4 s before give-way/stop line | driving | P1 |
+| R7 | Junction observation | crossing a give-way line with no `Q` and `E` in the 4 s before (roundabouts: `E` only, traffic comes from the right). Not judged at traffic lights or junctions with no line | driving | P1 |
+| R8 | Moving off safely | pulling away from the kerb (start of the drive) with no `M` and `E` (right shoulder) in the 5 s before. Not judged after stopping in traffic | driving | P1 |
 | R13 | Kerb | wheel crosses kerb | driving; serious if > 10 mph | P2 |
 
 - **[P0]** FR-F4. Each fault emits a `FaultEvent` (§7) with the nearest junction ID.
@@ -357,3 +358,78 @@ Times are targets. Each block ends with something that runs. Commit at the end o
 - Saint seat? Decided at Fri 18:00 check-in.
 - Gemini live demo slot time.
 - Verify problem stats and the May 2026 booking-law claim, with sources.
+
+---
+
+## 16. v2 — "Learn your test area"
+
+Decided 24 Oct 2026, after the checkpoint 2 submission. The checkpoint build is tagged `checkpoint-2`; v2 work happens on the `v2` branch and is merged into `main` (which Railway deploys) only when a step works end to end.
+
+### 16.1 What we're building
+
+Not a route memoriser and not only an examiner. Test routes haven't been published since 2010, examiners vary them, and about half the test is independent driving, so memorising one loop teaches the wrong thing. What's worth learning is **the area**: its 5–10 tricky junctions, roundabout lanes and hidden give-ways. That local knowledge is the moat.
+
+**One product, "learn your test area", with two modes that share the same fault engine:**
+- **Practice (instructor voice):** the default. It coaches in the moment ("check your right mirror", "right lane for the third exit here"). It's fine to leave the route; you can repeat a junction or free-drive around the area.
+- **Mock test (examiner voice):** a random route, a silent examiner, independent driving, real marking, pass or fail at the end.
+- **Progress, joining the two:** "your weak junctions", built from your past drives in Atlas. That's how practice turns into passing.
+
+The fault engine, world and directions already exist. Practice mode mostly changes **when and how** a fault is voiced (straight away, with coaching) instead of saving it for the end. It follows the real learner journey: lessons → mock test → real test.
+
+### 16.2 What's wrong with the checkpoint build (why v2)
+
+**It isn't the real test yet**
+
+| Real test | Checkpoint build |
+|---|---|
+| ~40 min, ~20 of them independent driving (satnav or signs, no examiner directions) | ~4 min, every turn spoken |
+| One manoeuvre: parallel park, bay park, or pull up on the right and reverse | Only "pull up on the left" |
+| Emergency stop on ~1 in 3 tests | None |
+| A "show me" question while driving | Only the "tell me" question before setting off |
+| You don't know your route | One loop, the same every time |
+
+**It marks the wrong things.** Only 8 rules exist (R1–R6, R9, R11). Junction observation (R7), which as recalled (verify against DVSA's published list) is the top reason people fail, was never built. Also not checked: moving off safely (mirrors and blind spot before pulling away), road position and lane discipline away from roundabouts, response to signs and road markings (stop lines, no entry), following distance. It can say "pass" where an examiner would fail you at the first junction, and that false confidence is worse than silence.
+
+**The roads are empty.** No other cars, cyclists or pedestrians, so the "response to other road users" part of the marking sheet can't happen, and a roundabout with no traffic teaches the wrong habit (rolling straight on).
+
+**It doesn't help you get better.**
+- No practice mode: faults come only at the end.
+- No progress: each learner gets a random ID in the browser and every drive is in Atlas, but the learner never sees their history. Today that data only feeds the instructor heatmap, which isn't wanted.
+- No local advice: the debrief quotes the general Highway Code, not "at this roundabout, take the right lane for the third exit".
+- No junction preview before driving, and no replay of the moment a fault happened.
+
+**Things that break trust**
+- **Bug:** ending the test without driving counts as a pass (Enter at 0 mph gave "PASS · No faults. Well driven.").
+- The ">15 driving faults = fail" mark is from the 40-minute test, so on a 4-minute route it's almost never reached.
+- More than 15 m off the route and the examiner just stops talking (FR-R3, "that's fine, take the next left", was never built).
+- Junctions are rounded patches without lane arrows, yet R9 marks lane choice, which can feel unfair. Not yet confirmed that speed limit signs are visible, though speeding is marked.
+- On/off keyboard controls and an automatic car; most UK tests are manual. Controller/wheel support would help skills carry over.
+- Only Wanstead, although the pitch is "your test centre".
+
+### 16.3 How other sites build worlds fast, and what we take from it
+
+Trailhead (trailhead.drk1rd.com, "any real place on Earth") never builds a place by hand. Its server hands out tiles of free worldwide data on demand (OpenStreetMap; Overture building outlines, incl. Microsoft/Google AI-traced ones; AWS terrain; ESA WorldCover land cover; Meta tree heights; Sentinel-2 satellite colour; Open-Meteo weather) and the browser builds the world in a background worker with simple rules as you drive. It's an off-road game, so roads only need to be drivable, not correct: no lanes that matter, no lights, no junction meaning, no test logic.
+
+Our world pipeline already works for any place (change `CENTRE` in `client/src/config.ts`, then `osm-fetch`, `osm-import`, `scenery`). Our effort went into the test layer (junction types, lights, directions, fault engine, crash data, debrief), which is a one-off. The only per-centre hand work left is **picking a route and checking it**.
+
+Take from it:
+- **Centres on request:** the server runs our pipeline the first time someone picks a centre and keeps the result. With automatic routes, a learner types their centre and drives it a minute later.
+- **Better free data:** Overture building outlines to fill OSM gaps; Meta tree heights to put trees where they really are.
+
+Don't take: satellite ground colour. Sentinel-2 pixels are 10 m wide, so it's blurry at street level (the same reason Google 3D Tiles were dropped).
+
+### 16.4 Build order
+
+One session each (names in CLAUDE.md). Before each one, say plainly what the learner will see.
+
+1. **Early-finish bug:** ending before the route is done is "test not finished", not a pass.
+2. **Junction observation (R7) and moving off safely:** mark what actually fails people.
+3. **Automatic routes:** build loops from the centre's road graph that include a roundabout, lights and a give-way. Gives 3+ routes per centre with no hand work.
+4. **Route choice and mock test:** pick a route or "surprise me"; a silent examiner; a stretch of independent driving following signs; a fault limit that fits the length of the drive.
+5. **Off-route recovery:** "that's fine, take the next left", then reroute back to the route.
+6. **Practice mode (instructor voice):** coaching in the moment, repeat a junction, free drive.
+7. **Your weak junctions:** a learner history from Atlas; the practice start screen suggests what to work on.
+8. **Local junction tips:** advice for each tricky junction, used in practice coaching and the debrief.
+9. **Manoeuvres and emergency stop.**
+10. **Other road users:** a few cars at the roundabout and lights, someone at the zebra.
+11. **Any centre:** type a test centre or postcode; the server builds the area and routes, then caches them.

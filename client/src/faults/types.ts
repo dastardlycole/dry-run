@@ -5,7 +5,7 @@ import type { RouteStep, Vec2 } from '../world/types';
 // Fault engine types (SPEC §4.6). The engine only ever sees these plain values, never Three.js or
 // Rapier objects, so a recorded trace of frames always gives the same faults.
 
-export type RuleId = 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'R6' | 'R9' | 'R11' | 'R15';
+export type RuleId = 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'R6' | 'R7' | 'R8' | 'R9' | 'R11' | 'R15';
 export type Category = 'driving' | 'serious' | 'dangerous';
 
 export const RULE_NAMES: Record<RuleId, string> = {
@@ -15,6 +15,8 @@ export const RULE_NAMES: Record<RuleId, string> = {
   R4: 'Mirror before turn',
   R5: 'No signal before turn',
   R6: 'Wrong signal',
+  R7: 'Junction observation',
+  R8: 'Moving off safely',
   R9: 'Roundabout lane',
   R11: 'Collision',
   R15: 'Tell me question',
@@ -29,6 +31,9 @@ export interface Frame {
   indicator: Indicator;
   /** M held down this frame. */
   mirror: boolean;
+  /** Q / E (look left / right) held down this frame. */
+  lookLeft: boolean;
+  lookRight: boolean;
   /** Distance along the route's driving line, and how far the car is from it. */
   routeM: number;
   offRouteM: number;

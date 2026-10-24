@@ -32,6 +32,8 @@ export interface RouteDef {
   name: string;
   /** Graph node ids to pass through in order; between them the shortest legal path is used. */
   waypoints: string[];
+  /** The exact graph edge ids to drive, when already worked out (generated routes); else joined from the waypoints. */
+  path?: string[];
   /** How many cars to park on side streets just off the route. */
   parkedCars: number;
 }
@@ -220,11 +222,14 @@ class Centreline {
   }
 }
 
-export function buildRoute(world: WorldData, def: RouteDef): Route {
-  const idx = new RoadIndex(world);
+/** `idx` can be passed in when building many routes over the same world, to skip re-indexing it. */
+export function buildRoute(world: WorldData, def: RouteDef, idx = new RoadIndex(world)): Route {
   if (def.waypoints.length < 2) throw new Error('a route needs at least two waypoints');
-  const edges: Edge[] = [];
-  for (let i = 0; i < def.waypoints.length - 1; i++) {
+  const edges: Edge[] = def.path?.map((id) => idx.edges.get(id) ?? fail(`no edge ${id}`)) ?? [];
+  edges.forEach((e, i) => i > 0 && e.from !== edges[i - 1].to && fail(`path breaks between ${edges[i - 1].id} and ${e.id}`));
+  if (def.path && (!edges.length || edges[0].from !== def.waypoints[0] || edges[edges.length - 1].to !== def.waypoints[def.waypoints.length - 1]))
+    fail('path does not run from the first waypoint to the last');
+  for (let i = 0; !def.path && i < def.waypoints.length - 1; i++) {
     const [from, to] = [def.waypoints[i], def.waypoints[i + 1]];
     if (from === to) throw new Error(`waypoint ${from} is repeated back to back`);
     edges.push(...shortestPath(idx, from, to));
@@ -404,6 +409,7 @@ const PARKING_ROADS = new Set(['residential', 'unclassified', 'tertiary', 'livin
  * Spread along the route, one per street, at the left kerb halfway along a stretch clear of junctions.
  */
 function parkedOffRoute(idx: RoadIndex, edges: Edge[], line: Vec2[], lineM: number[], count: number): Pose[] {
+  if (count <= 0) return [];
   const routeWays = new Set(edges.map((e) => e.wayId));
   const candidates: { pose: Pose; m: number; wayId: number }[] = [];
   for (const e of idx.world.graph.edges) {
@@ -432,5 +438,8 @@ function parkedOffRoute(idx: RoadIndex, edges: Edge[], line: Vec2[], lineM: numb
   return picked.sort((a, b) => a.m - b.m).map((c) => c.pose);
 }
 
+const fail = (msg: string): never => {
+  throw new Error(msg);
+};
 const round = (v: number, k = 100) => Math.round(v * k) / k;
 const roundPt = ([x, z]: Vec2): Vec2 => [round(x), round(z)];

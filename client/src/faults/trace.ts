@@ -13,8 +13,10 @@ export interface DriveScript {
   /** Speed at each point; a number for a steady speed. */
   mph: number | ((m: number) => number);
   limitMph?: number;
+  /** Seconds stood still at the start before pulling away (moving off, R8). */
+  waitS?: number;
   /** Controls at each point and time. Anything left out is off. */
-  controls?: (m: number, t: number) => Partial<Pick<Frame, 'indicator' | 'mirror' | 'offRouteM' | 'sideM' | 'contact'>>;
+  controls?: (m: number, t: number) => Partial<Pick<Frame, 'indicator' | 'mirror' | 'lookLeft' | 'lookRight' | 'offRouteM' | 'sideM' | 'contact'>>;
   fps?: number;
 }
 
@@ -26,7 +28,7 @@ export function drive(route: Pick<Route, 'line' | 'lengthM'>, s: DriveScript): F
   let t = 0;
   const end = s.toM ?? route.lengthM;
   while (m <= end) {
-    const speedMph = mphAt(m);
+    const speedMph = t < (s.waitS ?? 0) ? 0 : mphAt(m);
     const c = s.controls?.(m, t) ?? {};
     frames.push({
       t,
@@ -34,6 +36,8 @@ export function drive(route: Pick<Route, 'line' | 'lengthM'>, s: DriveScript): F
       speedMph,
       indicator: c.indicator ?? 'off',
       mirror: c.mirror ?? false,
+      lookLeft: c.lookLeft ?? false,
+      lookRight: c.lookRight ?? false,
       routeM: m,
       offRouteM: c.offRouteM ?? Math.abs(c.sideM ?? 0),
       sideM: c.sideM ?? 0,
@@ -50,9 +54,11 @@ export function drive(route: Pick<Route, 'line' | 'lengthM'>, s: DriveScript): F
 
 /**
  * How a careful driver works the controls on this route at `mph`: mirror, then signal ~80 m before each
- * turn (never before the last turn is done), and a second mirror check just before turning.
+ * turn (never before the last turn is done), and a second mirror check just before turning. Looks left
+ * then right in the 3 s before each give-way line. When the drive starts with `waitS` stood still, a mirror
+ * check and a look over the right shoulder in the last 2 s before pulling away.
  */
-export function carefulControls(route: Pick<Route, 'steps'>, mph: number) {
+export function carefulControls(route: Pick<Route, 'steps'>, mph: number, waitS = 0) {
   const v = mph / MPH_PER_MS;
   const turns = route.steps.filter(isTurn).map((s, i, all) => {
     const at = turnPointM(s);
@@ -61,13 +67,19 @@ export function carefulControls(route: Pick<Route, 'steps'>, mph: number) {
     const signalFrom = Math.max(at - 80, prevAt + 5, 15);
     return { at, signalFrom, want: expectedSignal(s) };
   });
-  return (m: number) => {
-    const mirror = turns.some(
-      (x) =>
-        (m >= x.signalFrom - 15 && m < x.signalFrom - 5) ||
-        (m >= x.at - (MIRROR_BEFORE_TURN_S - 2) * v && m < x.at - (MIRROR_BEFORE_TURN_S - 3) * v),
-    );
+  const giveWays = route.steps.flatMap((s) => (s.line?.kind === 'giveway' ? [s.line.atM] : []));
+  return (m: number, t = Infinity) => {
+    const pullingAway = t < waitS && t >= waitS - 2;
+    const mirror =
+      pullingAway ||
+      turns.some(
+        (x) =>
+          (m >= x.signalFrom - 15 && m < x.signalFrom - 5) ||
+          (m >= x.at - (MIRROR_BEFORE_TURN_S - 2) * v && m < x.at - (MIRROR_BEFORE_TURN_S - 3) * v),
+      );
+    const lookLeft = giveWays.some((at) => m >= at - 3 * v && m < at - 2 * v);
+    const lookRight = pullingAway || giveWays.some((at) => m >= at - 2 * v && m < at - v);
     const signalling = turns.find((x) => m >= x.signalFrom && m <= x.at + 5);
-    return { mirror, indicator: signalling?.want ?? 'off' } as const;
+    return { mirror, lookLeft, lookRight, indicator: signalling?.want ?? 'off' } as const;
   };
 }

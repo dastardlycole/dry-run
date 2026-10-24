@@ -102,3 +102,20 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color:
 #result .tellme { margin: 0 0 12px; font-size: 14px; }
 #result .tellme.pass { color: #4ad66d; }
 #result .tellme.fail { color: #ffd24a; }
+#help a { color: inherit; }
+#centre { position: absolute; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.55); }
+#centre .card { width: min(520px, 100%); box-sizing: border-box; padding: 24px; border-radius: 10px; background: #1b1f24; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); }
+#centre h1 { margin: 0 0 8px; font-size: 28px; }
+#centre p { margin: 0 0 14px; line-height: 1.4; opacity: 0.9; }
+#centre .row { display: flex; gap: 8px; margin-bottom: 12px; }
+#centre input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid #444; border-radius: 6px; background: #0f1215; color: inherit; font-size: 17px; }
+#centre button { font: inherit; cursor: pointer; }
+#centre .primary { padding: 10px 18px; border: 0; border-radius: 6px; background: #2f7de1; color: #fff; font-weight: 600; }
+#centre .primary:disabled { opacity: 0.6; cursor: default; }
+#centre .note { min-height: 1.4em; font-size: 14px; }
+#centre .note.error { color: #ff8a8a; }
+#centre .link { padding: 0; border: 0; background: none; color: #8bb8ff; text-decoration: underline; }
+#centre .bar { height: 8px; margin-bottom: 10px; border-radius: 4px; background: #0f1215; overflow: hidden; }
+#centre .bar > div { height: 100%; width: 0; background: #2f7de1; transition: width 0.6s ease; }
+/* The 'tell me' offer waits until the start card is closed. */
+.choosing #tellme { display: none; }

@@ -26,6 +26,7 @@ import { addBuildingColliders, addParkedCars } from '../world/solids';
 import { setAnisotropy } from '../world/textures';
 import { buildWorld, emptyWorld, groundHalfM, loadWorld } from '../world/world';
 import { Cameras } from './camera';
+import { centreFiles, CentrePicker } from './centre-picker';
 import { Car, WHEELBASE_M } from './car';
 import { loadCarAsset } from '../world/car-asset';
 import { Contacts } from './contacts';
@@ -55,30 +56,43 @@ const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
 world.timestep = PHYSICS_DT;
 const events = new RAPIER.EventQueue(true);
 
-// Roads are flat at ground level, so one ground collider carries the car everywhere (SPEC §4.1).
-const groundHalf = groundHalfM(CENTRE.radiusM);
-const groundCollider = world.createCollider(
-  RAPIER.ColliderDesc.cuboid(groundHalf, 0.1, groundHalf).setTranslation(0, -0.1, 0),
-);
+// Which centre: ?centre=goodmayes (one the start box built); default Wanstead. Which route: ?route=auto-2
+// picks one (route-<id>.json); default the demo at Wanstead, the first generated one elsewhere.
+const params = new URLSearchParams(location.search);
+const centreId = params.get('centre')?.replace(/[^a-z0-9-]/g, '') || CENTRE.id;
+const where = centreId === CENTRE.id ? { base: `/${CENTRE.id}`, routes: ['demo'] } : await centreFiles(centreId);
+const routeId = params.get('route')?.replace(/[^\w-]/g, '') || where.routes[0] || 'auto-1';
 // If the map can't load, keep going on plain grass so the car still drives.
 let mapNote = '';
+// On the first visit, ask where the learner's test is; Wanstead drives behind the card meanwhile.
+const picker = new CentrePicker(CENTRE.name);
+// Links straight to a route (?route=auto-2) skip it.
+if (!params.has('centre') && !params.has('route')) picker.show();
+picker.onHide = () => input.clear();
 const [worldData, route] = await Promise.all([
-  loadWorld(CENTRE.id).catch((err) => {
+  loadWorld(where.base).catch((err) => {
     console.error('[world] failed to load, using empty world', err);
     mapNote = 'map failed to load · ';
-    return emptyWorld(CENTRE);
+    // Still the centre that was picked, so its drives aren't saved as Wanstead ones.
+    return emptyWorld({ ...CENTRE, id: centreId, name: centreId });
   }),
   // Without a route the car still drives, from the nearest main road to the centre.
-  loadRoute(CENTRE.id, 'demo').catch((err) => {
+  loadRoute(where.base, routeId).catch((err) => {
     console.error('[route] failed to load', err);
     mapNote += 'route failed to load · ';
     return null;
   }),
 ]);
+const centre = worldData.centre;
+// Roads are flat at ground level, so one ground collider carries the car everywhere (SPEC §4.1).
+const groundHalf = groundHalfM(centre.radiusM);
+const groundCollider = world.createCollider(
+  RAPIER.ColliderDesc.cuboid(groundHalf, 0.1, groundHalf).setTranslation(0, -0.1, 0),
+);
 const roadStart = buildWorld(worldData, scene);
 // Parks, water and trees are looks only: they come in the background and the drive never waits for them.
 let trees: Trees | null = null;
-loadScenery(CENTRE.id)
+loadScenery(where.base)
   .then(async (scenery) => {
     scene.add(greenAreas(scenery), streetDetails(worldData, scenery));
     trees = await Trees.create(placeTrees(worldData, scenery, TREE_SHAPES), renderer);
@@ -137,7 +151,7 @@ const faults = route
     })
   : null;
 const pullUp = route ? new PullUp(route.lengthM) : null;
-const toLatLng = makeProjection(CENTRE.lat, CENTRE.lng).toLatLng;
+const toLatLng = makeProjection(centre.lat, centre.lng).toLatLng;
 
 // Sessions and faults go to the server in the background (SPEC §9); the drive never waits for it.
 const sync = new Sync();
@@ -173,11 +187,11 @@ function openSession() {
   const now = Date.now();
   // Fault times are this session's start plus sim time (startedAtMs is when sim time was 0), so a
   // replayed trace gives the same times. Sim time stops while paused, so they can run a little early.
-  session = { sessionId: crypto.randomUUID(), learnerId, centreId: CENTRE.id, startedAtMs: now - simTime * 1000 };
+  session = { sessionId: crypto.randomUUID(), learnerId, centreId: centre.id, startedAtMs: now - simTime * 1000 };
   sync.startSession({
     sessionId: session.sessionId,
     learnerId,
-    centreId: CENTRE.id,
+    centreId: centre.id,
     routeId: route!.id,
     startedAt: new Date(now).toISOString(),
   });
@@ -315,9 +329,9 @@ const trace: Frame[] = [];
 const MAX_TRACE_FRAMES = 54_000;
 /** The examiner waits for the first key press or click: browsers block sound until then. */
 let started = false;
-const start = () => (started = true);
-window.addEventListener('keydown', start, { once: true });
-window.addEventListener('pointerdown', start, { once: true });
+const start = () => (started ||= !picker.visible);
+window.addEventListener('keydown', start);
+window.addEventListener('pointerdown', start);
 /** The 'tell me' question before each test (SPEC §4.5 FR-E3). The drive starts once it's answered or skipped. */
 const tellMe = new TellMe();
 /** This test's 'tell me' answer, or null if it was skipped. */
@@ -348,7 +362,10 @@ renderer.setAnimationLoop((now: number) => {
   const dt = Math.min((now - last) / 1000, 0.25);
   last = now;
 
+  // While the start card is open the drive hasn't begun: nothing moves and the examiner waits.
+  const choosing = picker.visible;
   for (const action of input.takeActions()) {
+    if (choosing) continue;
     // The result screen is its own pause.
     if (action === 'pause') {
       if (!resultScreen.visible) setPaused(!paused);
@@ -387,7 +404,7 @@ renderer.setAnimationLoop((now: number) => {
     } else if (!paused) indicator = toggleIndicator(indicator, action === 'indicateLeft' ? 'left' : 'right');
   }
 
-  if (!paused) {
+  if (!paused && !choosing) {
     acc += dt;
     let steps = 0;
     while (acc >= PHYSICS_DT && steps < MAX_STEPS_PER_FRAME) {
@@ -418,7 +435,7 @@ renderer.setAnimationLoop((now: number) => {
     const pos: [number, number] = [car.mesh.position.x, car.mesh.position.z];
     const m = progress.update(pos);
     guide?.show(m);
-    if (started && !tellMe.busy && !paused && !ended) {
+    if (started && !tellMe.busy && !paused && !choosing && !ended) {
       if (!session) openSession();
       for (const text of director!.update(m, car.speedMph / MPH_PER_MS, progress.offM)) voice.say(text);
       const frame: Frame = {
@@ -427,6 +444,7 @@ renderer.setAnimationLoop((now: number) => {
         speedMph: car.speedMph,
         indicator,
         mirror: input.takeMirrorCheck(),
+        ...input.takeLooks(),
         routeM: m,
         offRouteM: progress.offM,
         sideM: progress.sideM,
@@ -470,5 +488,5 @@ if (import.meta.env.DEV) Object.assign(window, {
 const status = document.querySelector('#status')!;
 fetch('/api/health')
   .then((r) => r.json())
-  .then((h) => (status.textContent = `${mapNote}server ok · mongo ${h.mongo}`))
-  .catch(() => (status.textContent = `${mapNote}server offline`));
+  .then((h) => (status.textContent = `${centre.name} · ${route?.name ?? 'free drive'} · ${mapNote}server ok · mongo ${h.mongo}`))
+  .catch(() => (status.textContent = `${centre.name} · ${mapNote}server offline`));

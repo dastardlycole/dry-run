@@ -2,7 +2,7 @@ import type { Indicator } from '../sim/controls';
 import type { RouteStep, Vec2 } from '../world/types';
 import type { Fault, FaultContext, Frame } from './types';
 
-// Rules R1–R6, R9 and R11 (SPEC §4.6 FR-F3). Each is a plain function of the current frame and what the engine
+// Rules R1–R9 and R11 (SPEC §4.6 FR-F3). Each is a plain function of the current frame and what the engine
 // remembers about earlier frames: no clocks, no randomness, no 3D. The AI never decides faults.
 
 export const SPEED_MARGIN_MPH = 2;
@@ -17,6 +17,12 @@ export const ON_ROUTE_M = 8;
 export const LANE_SAMPLE_M = 20;
 /** R11: contact this soon after the last one is the same crash (bouncing off and back in, or scraping along a wall). */
 export const SAME_CRASH_S = 3;
+/** R7: a look (Q / E) counts for a give-way line this long before the car crosses it. */
+export const LOOK_BEFORE_LINE_S = 4;
+/** R8: the car has moved off once it's faster than this. */
+export const MOVING_OFF_MPH = 3;
+/** R8: the mirror check and look over the right shoulder count this long before moving off. */
+export const MOVING_OFF_CHECK_S = 5;
 /** A bigger jump along the route in one frame is a reset or a lost car, not driving over a line. */
 const MAX_STEP_M = 30;
 
@@ -25,6 +31,10 @@ export interface History {
   prev?: Frame;
   /** Last sim time M was held, and the last time each indicator was on. */
   lastMirrorT: number;
+  /** Last sim time each way was looked (Q / E). */
+  lastLookT: Record<'left' | 'right', number>;
+  /** R8: the car is pulled up at the side of the road (the start of the drive), so moving off is still to be judged. */
+  movingOffArmed: boolean;
   lastOnT: Record<'left' | 'right', number>;
   /** When each indicator was last switched on, and when the car last made a turn on the route. */
   signalFromT: Record<'left' | 'right', number>;
@@ -42,6 +52,8 @@ export interface History {
 
 export const newHistory = (): History => ({
   lastMirrorT: -Infinity,
+  lastLookT: { left: -Infinity, right: -Infinity },
+  movingOffArmed: true,
   lastOnT: { left: -Infinity, right: -Infinity },
   signalFromT: { left: -Infinity, right: -Infinity },
   lastTurnT: -Infinity,
@@ -86,6 +98,9 @@ export function expectedSignal(s: RouteStep): Indicator {
   if (exit === 1) return 'left';
   return exit * 2 > exits + 1 ? 'right' : 'off';
 }
+
+/** What a fault at a route step records about it. */
+const stepContext = (s: RouteStep) => ({ stepId: s.id, action: s.action, ...(s.exit ? { exit: s.exit } : {}) });
 
 const fault = (f: Frame, ruleId: Fault['ruleId'], category: Fault['category'], junctionId: string, context: Fault['context']): Fault => ({
   ruleId,
@@ -148,7 +163,7 @@ export function turns(f: Frame, h: History, ctx: FaultContext): Fault[] {
     if (!isTurn(s) || !crossed(h.prev, f, turnPointM(s))) continue;
     const lastTurnT = h.lastTurnT;
     h.lastTurnT = f.t;
-    const context = { stepId: s.id, action: s.action, ...(s.exit ? { exit: s.exit } : {}) };
+    const context = stepContext(s);
     // R4: no mirror check in the 5 s before the turn.
     if (f.t - h.lastMirrorT > MIRROR_BEFORE_TURN_S) out.push(fault(f, 'R4', 'driving', s.junctionId, context));
     const want = expectedSignal(s);
@@ -221,4 +236,39 @@ export function collision(f: Frame, h: History, ctx: FaultContext): Fault[] {
   const newCrash = f.t - h.lastContactT > SAME_CRASH_S;
   h.lastContactT = f.t;
   return newCrash ? [fault(f, 'R11', 'dangerous', nearestJunctionId(f.pos, ctx.junctions), { with: f.contact })] : [];
+}
+
+/**
+ * R7: crossed a give-way line (or a stop sign's line) without looking in the 4 s before. Both ways (Q and E);
+ * only right (E) at a roundabout, where all the traffic comes from the right. Not judged at traffic
+ * lights (the light gives priority) or at junctions with no line on the map.
+ */
+export function junctionObservation(f: Frame, h: History, ctx: FaultContext): Fault[] {
+  const out: Fault[] = [];
+  for (const s of ctx.steps) {
+    const judged = s.line?.kind === 'giveway' || (s.line?.kind === 'stop' && s.control !== 'signals');
+    if (!judged || !crossed(h.prev, f, s.line!.atM)) continue;
+    const sides: ('left' | 'right')[] = s.action === 'roundabout' ? ['right'] : ['left', 'right'];
+    const missed = sides.filter((side) => f.t - h.lastLookT[side] > LOOK_BEFORE_LINE_S);
+    if (missed.length) {
+      out.push(fault(f, 'R7', 'driving', s.junctionId, { ...stepContext(s), missed }));
+    }
+  }
+  return out;
+}
+
+/**
+ * R8: pulled away from the side of the road without a mirror check (M) and a look over the right
+ * shoulder (E) in the 5 s before. Judged once, at the start of the drive: stopping at lights or a
+ * give-way is stopping in traffic, not pulling up, so moving off from there isn't judged.
+ */
+export function movingOff(f: Frame, h: History, ctx: FaultContext): Fault[] {
+  if (!h.movingOffArmed || f.speedMph < MOVING_OFF_MPH) return [];
+  h.movingOffArmed = false;
+  // Already moving when the drive was first seen (a trace cut from the middle of a drive): nothing to judge.
+  if (!h.prev || h.prev.speedMph >= MOVING_OFF_MPH) return [];
+  const missed: ('mirror' | 'right')[] = [];
+  if (f.t - h.lastMirrorT > MOVING_OFF_CHECK_S) missed.push('mirror');
+  if (f.t - h.lastLookT.right > MOVING_OFF_CHECK_S) missed.push('right');
+  return missed.length ? [fault(f, 'R8', 'driving', nearestJunctionId(f.pos, ctx.junctions), { missed })] : [];
 }

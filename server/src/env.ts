@@ -11,4 +11,6 @@ export const env = {
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
   centreId: process.env.CENTRE_ID ?? 'wanstead',
   demoMode: process.env.DEMO_MODE === 'true',
+  /** Where centres built on request are kept (default tools/data/centres). */
+  centreCacheDir: process.env.CENTRE_CACHE_DIR ?? '',
 };

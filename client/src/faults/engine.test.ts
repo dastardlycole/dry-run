@@ -7,16 +7,20 @@ import { runTrace, toFaultEvent } from './engine';
 import { speedLimitAt } from './limits';
 import { makeProjection } from '../world/projection';
 import { countFaults, resultOf } from './result';
-import { expectedSignal, LANE_SAMPLE_M, SAME_CRASH_S } from './rules';
+import { expectedSignal, LANE_SAMPLE_M, LOOK_BEFORE_LINE_S, MOVING_OFF_CHECK_S, SAME_CRASH_S } from './rules';
 import { carefulControls, drive } from './trace';
 import type { FaultContext, Frame } from './types';
 
-// Rules R1–R6, R9 and R11 on scripted drives along the real Wanstead demo route (SPEC §4.6 FR-F5).
+// Rules R1–R9 and R11 on scripted drives along the real Wanstead demo route (SPEC §4.6 FR-F5).
 
 const route = demo as Route;
 const step = (id: string) => route.steps.find((s) => s.id === id)!;
 const MPH = 25;
+/** Seconds stood at the start before pulling away, in drives that start from the kerb. */
+const WAIT = 3;
 const careful = carefulControls(route, MPH);
+/** The same, plus the checks before pulling away from the kerb. */
+const carefulFromKerb = carefulControls(route, MPH, WAIT);
 
 const ctx = (lightFor: FaultContext['lightFor'] = () => 'green'): FaultContext => ({
   steps: route.steps,
@@ -34,6 +38,10 @@ const rules = (frames: Frame[], c = ctx()) => runTrace(c, frames).map((f) => `${
 describe('a careful drive', () => {
   it('gets no faults over the whole route', () => {
     expect(runTrace(ctx(), drive(route, { mph: MPH, controls: careful }))).toEqual([]);
+  });
+
+  it('gets no faults pulling away from the kerb at the start, either', () => {
+    expect(runTrace(ctx(), drive(route, { mph: MPH, waitS: WAIT, controls: carefulFromKerb }))).toEqual([]);
   });
 
   it('gives the same faults every time for the same drive', () => {
@@ -190,6 +198,96 @@ describe('R6 wrong signal', () => {
   it("doesn't judge a turn the car didn't take (off the route)", () => {
     const controls = withChange(s6.atM - 2, s6.atM + 2, () => ({ indicator: 'left', offRouteM: 20 }));
     expect(rules(drive(route, { mph: MPH, controls }))).toEqual([]);
+  });
+});
+
+describe('R7 junction observation', () => {
+  const s4 = step('s4');
+  const s7 = step('s7');
+  /** A careful drive with no looks (Q / E) at all. */
+  const noLooks = (m: number) => ({ ...careful(m), lookLeft: false, lookRight: false });
+
+  it('marks crossing a give-way line, or a roundabout give-way line, without looking', () => {
+    const faults = runTrace(ctx(), drive(route, { mph: MPH, controls: noLooks }));
+    expect(faults.map((f) => `${f.ruleId}:${f.junctionId}`)).toEqual([`R7:${s4.junctionId}`, `R7:${s7.junctionId}`]);
+    expect(faults[0].context).toMatchObject({ stepId: 's4', action: 'roundabout', missed: ['right'] });
+    expect(faults[1].context).toMatchObject({ stepId: 's7', action: 'right', missed: ['left', 'right'] });
+  });
+
+  it("doesn't judge traffic lights or a junction with no line", () => {
+    const lights = route.steps.filter((s) => s.control === 'signals').map((s) => s.junctionId);
+    expect(lights.length).toBeGreaterThan(0);
+    const faults = runTrace(ctx(), drive(route, { mph: MPH, controls: noLooks }));
+    expect(faults.filter((f) => lights.includes(f.junctionId) || f.junctionId === step('s6').junctionId)).toEqual([]);
+  });
+
+  it('judges a stop sign like a give-way, but not the stop line at lights', () => {
+    const stopSign = route.steps.map((s) => (s.id === 's7' ? { ...s, control: 'stop' as const, line: { ...s.line!, kind: 'stop' as const } } : s));
+    const faults = runTrace({ ...ctx(), steps: stopSign }, drive(route, { mph: MPH, controls: noLooks }));
+    expect(faults.map((f) => `${f.ruleId}:${f.junctionId}`)).toEqual([`R7:${s4.junctionId}`, `R7:${s7.junctionId}`]);
+  });
+
+  it('needs both ways at a give-way', () => {
+    const lineM = s7.line!.atM;
+    const leftOnly = withChange(lineM - 50, lineM + 5, (c) => ({ lookLeft: c.lookLeft || c.lookRight, lookRight: false }));
+    expect(rules(drive(route, { mph: MPH, controls: leftOnly }))).toEqual([`R7:driving:${s7.junctionId}`]);
+  });
+
+  it('needs only a look right at a roundabout', () => {
+    const lineM = s4.line!.atM;
+    const rightOnly = withChange(lineM - 50, lineM + 5, () => ({ lookLeft: false }));
+    expect(rules(drive(route, { mph: MPH, controls: rightOnly }))).toEqual([]);
+  });
+
+  it(`marks looks more than ${LOOK_BEFORE_LINE_S} s before the line, as when waiting there and not looking again`, () => {
+    const lineM = s7.line!.atM;
+    const approach = drive(route, { toM: lineM - 1, mph: MPH, controls: careful });
+    const last = approach.at(-1)!;
+    const waiting = Array.from({ length: 30 * (LOOK_BEFORE_LINE_S + 1) }, (_, i) => ({ ...last, t: last.t + (i + 1) / 30, speedMph: 0, lookLeft: false, lookRight: false }));
+    const t0 = waiting.at(-1)!.t;
+    const away = drive(route, { fromM: lineM - 0.5, toM: lineM + 20, mph: 5 }).map((f) => ({ ...f, t: f.t + t0 + 1 / 30 }));
+    // Only R7 here: the mirror and signal (R4, R5) aren't kept up while waiting in this made-up drive.
+    const r7 = (frames: Frame[]) => rules(frames).filter((r) => r.startsWith('R7'));
+    expect(r7([...approach, ...waiting, ...away])).toEqual([`R7:driving:${s7.junctionId}`]);
+    // Looking again just before pulling out is fine.
+    const looked = waiting.map((f, i) => (i > waiting.length - 30 ? { ...f, lookLeft: true, lookRight: true } : f));
+    expect(r7([...approach, ...looked, ...away])).toEqual([]);
+  });
+});
+
+describe('R8 moving off safely', () => {
+  /** Pull away from the kerb at the start, with some of the checks left out while stood still. */
+  const pullAway = (change: Partial<Frame>) =>
+    rules(drive(route, { toM: 40, mph: MPH, waitS: WAIT, controls: (m, t) => ({ ...carefulFromKerb(m, t), ...(t < WAIT + 0.5 ? change : {}) }) }));
+
+  it('marks pulling away without a mirror check, or without a look over the right shoulder', () => {
+    expect(pullAway({ mirror: false })).toEqual([expect.stringMatching(/^R8:driving:/)]);
+    expect(pullAway({ lookRight: false })).toEqual([expect.stringMatching(/^R8:driving:/)]);
+    const [f] = runTrace(ctx(), drive(route, { toM: 10, mph: MPH, waitS: WAIT, controls: () => ({}) }));
+    expect(f).toMatchObject({ ruleId: 'R8', context: { missed: ['mirror', 'right'] } });
+  });
+
+  it(`marks checks more than ${MOVING_OFF_CHECK_S} s before pulling away`, () => {
+    // Checks in the first half second of standing still, then nothing until pulling away.
+    const waitS = MOVING_OFF_CHECK_S + 1;
+    const early = (m: number, t: number) => ({ ...careful(m), ...(t < 0.5 ? { mirror: true, lookRight: true } : {}) });
+    const frames = drive(route, { toM: 40, mph: MPH, waitS, controls: early });
+    expect(rules(frames)).toEqual([expect.stringMatching(/^R8:driving:/)]);
+  });
+
+  it("judges only the first pull away, not moving off again after stopping at lights", () => {
+    const s1 = step('s1');
+    const approach = drive(route, { toM: s1.line!.atM - 2, mph: MPH, waitS: WAIT, controls: carefulFromKerb });
+    const last = approach.at(-1)!;
+    const stopped = Array.from({ length: 60 }, (_, i) => ({ ...last, t: last.t + (i + 1) / 30, speedMph: 0 }));
+    const t0 = stopped.at(-1)!.t;
+    const away = drive(route, { fromM: last.routeM, toM: s1.atM + 30, mph: MPH, controls: careful }).map((f) => ({ ...f, t: f.t + t0 + 1 / 30 }));
+    away[0] = { ...away[0], speedMph: 0 };
+    expect(rules([...approach, ...stopped, ...away])).toEqual([]);
+  });
+
+  it("doesn't judge a drive first seen already moving", () => {
+    expect(rules(drive(route, { fromM: 300, toM: 400, mph: MPH }))).toEqual([]);
   });
 });
 
