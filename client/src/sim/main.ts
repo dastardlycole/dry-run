@@ -28,6 +28,7 @@ import { addBuildingColliders, addParkedCars } from '../world/solids';
 import { setAnisotropy } from '../world/textures';
 import { buildWorld, emptyWorld, groundHalfM, loadWorld } from '../world/world';
 import { Cameras } from './camera';
+import { ExaminerPanel, fetchExplanation } from './examiner-panel';
 import { centreFiles, CentrePicker, modeOf } from './centre-picker';
 import { Car, WHEELBASE_M } from './car';
 import { loadCarAsset } from '../world/car-asset';
@@ -178,6 +179,7 @@ let simTime = 0;
 const cameras = new Cameras(car);
 const input = new Input();
 const hud = new Hud();
+const examinerPanel = new ExaminerPanel();
 // The place line at the top: the road the car is on and the area. Looked up twice a second, not every frame
 // (thousands of road pieces); on an unnamed road it keeps the last name.
 const area = areaOf(centre.name, centre.address);
@@ -262,6 +264,19 @@ function recordFault(f: Fault, place: string) {
   if (coaching) voice.sayTip(tipFor(f));
   found.push({ id: event._id, fault: f, place });
   sync.addFault(event);
+  showNote(event._id, f, place);
+}
+
+/** The examiner's notes, top right: the fault now, its explanation once the server has written it (in the background). */
+function showNote(faultId: string, f: Fault, place: string) {
+  const signal = examinerPanel.show(faultId, f.ruleId, f.category, place);
+  const s = session!;
+  void (async () => {
+    // The fault has to be on the server before its explanation can be asked for.
+    await sendNow(s.sessionId);
+    const explanation = await fetchExplanation(s.sessionId, faultId, signal);
+    if (!signal.aborted) examinerPanel.explain(faultId, explanation);
+  })();
 }
 
 /**
@@ -272,6 +287,7 @@ function endDrive() {
   if (!session || ended) return;
   ended = true;
   if (paused) setPaused(false);
+  examinerPanel.hide();
   voice.stop();
   const finished = director?.finished ?? false;
   const counts = countFaults(found.map((f) => f.fault));
@@ -479,6 +495,7 @@ renderer.setAnimationLoop((now: number) => {
       hud.clearFaults();
       resultScreen.hide();
       stopDebrief();
+      examinerPanel.hide();
       // A test reset part-way is saved as ended here (UNFINISHED), with the faults so far. A new one starts on the next frame.
       if (session && !ended) sync.endSession(session.sessionId, new Date().toISOString(), 'abandoned');
       session = null;
