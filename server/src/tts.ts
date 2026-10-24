@@ -54,8 +54,30 @@ async function ttsOnce(apiKey: string, text: string, voice: string): Promise<Cli
   const body = (await res.json()) as any;
   const data = body.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData)?.inlineData;
   if (!data) throw new Error(`${MODEL}: no audio in reply: ${JSON.stringify(body).slice(0, 300)}`);
-  const rate = Number(/rate=(\d+)/.exec(data.mimeType)?.[1] ?? 24000);
-  return { pcm: trimSilence(Buffer.from(data.data, 'base64'), rate), rate };
+  const { pcm, rate } = audioOf(Buffer.from(data.data, 'base64'), data.mimeType);
+  return { pcm: trimSilence(pcm, rate), rate };
+}
+
+/**
+ * The samples in a reply. Gemini used to send bare 16-bit PCM; now it can send a whole WAV file, with a
+ * provenance (C2PA) block after the audio. Played as sound, that block is a loud scratch at the end, so
+ * only the 'data' chunk is kept.
+ */
+export function audioOf(bytes: Buffer, mimeType = ''): Clip {
+  const fallbackRate = Number(/rate=(\d+)/.exec(mimeType)?.[1] ?? 24000);
+  if (bytes.toString('latin1', 0, 4) !== 'RIFF' || bytes.toString('latin1', 8, 12) !== 'WAVE') {
+    return { pcm: bytes, rate: fallbackRate };
+  }
+  let rate = fallbackRate;
+  for (let at = 12; at + 8 <= bytes.length; ) {
+    const id = bytes.toString('latin1', at, at + 4);
+    const size = bytes.readUInt32LE(at + 4);
+    const body = at + 8;
+    if (id === 'fmt ') rate = bytes.readUInt32LE(body + 4);
+    if (id === 'data') return { pcm: bytes.subarray(body, Math.min(bytes.length, body + size)), rate };
+    at = body + size + (size & 1); // chunks are padded to an even length
+  }
+  throw new Error(`${MODEL}: WAV reply has no audio data`);
 }
 
 /** Cuts silence at the start and end, so the sim's timing of directions is about the words. */
