@@ -18,6 +18,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color:
 #paused .title small { font-size: 15px; font-weight: 400; opacity: 0.8; }
 #pause-card { width: min(760px, 100%); }
 #topbar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); display: flex; align-items: center; gap: 8px; }
+#mode-badge { flex: none; padding: 4px 12px; border-radius: 6px; font-size: 14px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; pointer-events: none; }
+#mode-badge.test { background: #b8322f; color: #fff; }
+#mode-badge.practice { background: #2f9e5a; color: #fff; }
+#mode-badge.free { background: #6a4fc4; color: #fff; }
 #change-route { flex: none; padding: 4px 12px; border: 1px solid #2f7de1; border-radius: 6px; background: rgba(15, 18, 21, 0.75); color: inherit; font-size: 14px; cursor: pointer; }
 #change-route:hover { background: #2f7de1; }
 #place { min-width: 0; padding: 4px 14px; border-radius: 6px; background: rgba(0, 0, 0, 0.5); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }

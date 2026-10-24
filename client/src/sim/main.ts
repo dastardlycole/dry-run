@@ -72,6 +72,10 @@ const mode = modeOf(params.get('mode'));
 const coaching = mode !== 'test';
 if (coaching) document.getElementById('help-end')!.textContent = 'drive';
 document.getElementById('help-repeat')!.hidden = mode !== 'practice';
+// Always on screen, so it's clear whether this drive is being marked like a test.
+const badge = document.getElementById('mode-badge')!;
+badge.className = mode;
+badge.textContent = { test: 'Mock test', practice: 'Practice', free: 'Free drive' }[mode];
 // If the map can't load, keep going on plain grass so the car still drives.
 let mapNote = '';
 // Until a route is chosen, the start card asks where the learner's test is and which route to drive; the
