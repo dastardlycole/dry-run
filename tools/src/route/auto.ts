@@ -202,7 +202,7 @@ export function autoRoutes(world: WorldData, opts: AutoOptions = {}): AutoRoute[
   const seen = new Set<string>();
   let picked: Found[] = [];
 
-  for (const { need, loose } of TIERS) {
+  for (const [tier, { need, loose }] of TIERS.entries()) {
     if (picked.length >= min) break;
     const [minM, maxM] = loose ? LOOSE_LENGTH_M : lengthM;
     if (need.some((f) => !pools[f].length)) continue;
@@ -237,7 +237,7 @@ export function autoRoutes(world: WorldData, opts: AutoOptions = {}): AutoRoute[
       if (!loose && looksOdd(route)) continue;
       const has = featuresOf(route);
       if (!need.every((n) => has.includes(n))) continue;
-      found.push({ waypoints, route, has });
+      found.push({ waypoints, route, has, tier });
     }
     picked = pickDistinct(idx, found, count);
   }
@@ -262,12 +262,17 @@ interface Found {
   waypoints: string[];
   route: Route;
   has: Feature[];
+  /** Index in TIERS of the search that found it: lower = stricter, better. */
+  tier: number;
 }
 
-/** Best first (all three kinds of junction, then nearest a typical test length), skipping near-copies. */
+/** Best first (most kinds of junction, strictest search, then nearest a typical test length), skipping near-copies. */
 function pickDistinct(idx: RoadIndex, found: Found[], count: number): Found[] {
   const sorted = [...found].sort(
-    (a, b) => b.has.length - a.has.length || Math.abs(a.route.lengthM - TARGET_M) - Math.abs(b.route.lengthM - TARGET_M),
+    (a, b) =>
+      b.has.length - a.has.length ||
+      a.tier - b.tier ||
+      Math.abs(a.route.lengthM - TARGET_M) - Math.abs(b.route.lengthM - TARGET_M),
   );
   const picked: Found[] = [];
   for (const f of sorted) {
