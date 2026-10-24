@@ -117,7 +117,8 @@ Submission notes per track: §14.
 | R9 | Roundabout lane | wrong approach lane for exit taken | driving | P0 |
 | R11 | Collision | any contact | dangerous | P0 |
 | R15 | Tell me question | wrong answer to the 'tell me' question (FR-E3), judged by Gemini Live against the official DVSA answer | driving | P1 |
-| R7 | Junction observation | no `Q` and `E` within 4 s before give-way/stop line | driving | P1 |
+| R7 | Junction observation | crossing a give-way line with no `Q` and `E` in the 4 s before (roundabouts: `E` only, traffic comes from the right). Not judged at traffic lights or junctions with no line | driving | P1 |
+| R8 | Moving off safely | pulling away from the kerb (start of the drive) with no `M` and `E` (right shoulder) in the 5 s before. Not judged after stopping in traffic | driving | P1 |
 | R13 | Kerb | wheel crosses kerb | driving; serious if > 10 mph | P2 |
 
 - **[P0]** FR-F4. Each fault emits a `FaultEvent` (§7) with the nearest junction ID.

@@ -24,6 +24,9 @@ const EXAMPLES: { label: string; fault: DebriefFault; junctionType?: string }[] 
   { label: 'Ran a red light', fault: fault('R2', { light: 'red' }, 22), junctionType: 'signals' },
   { label: 'Speeding past a crossing', fault: fault('R1', { limitMph: 30 }, 41), junctionType: 'crossing' },
   { label: 'No mirrors before turning right', fault: fault('R4', { action: 'right' }), junctionType: 'giveway' },
+  { label: "Didn't look either way at a give-way", fault: fault('R7', { action: 'right', missed: ['left', 'right'] }), junctionType: 'giveway' },
+  { label: "Didn't look right entering a roundabout", fault: fault('R7', { action: 'roundabout', exit: 3, missed: ['right'] }), junctionType: 'roundabout' },
+  { label: 'Pulled away without a shoulder check', fault: fault('R8', { missed: ['right'] }, 4) },
   { label: 'Indicated without mirrors', fault: fault('R3', { indicator: 'left' }) },
   { label: 'Hit a parked car', fault: fault('R11', { with: 'parkedCar' }, 18) },
   {

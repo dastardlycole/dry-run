@@ -427,6 +427,7 @@ renderer.setAnimationLoop((now: number) => {
         speedMph: car.speedMph,
         indicator,
         mirror: input.takeMirrorCheck(),
+        ...input.takeLooks(),
         routeM: m,
         offRouteM: progress.offM,
         sideM: progress.sideM,

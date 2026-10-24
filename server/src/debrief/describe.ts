@@ -46,6 +46,19 @@ export function describeFault(f: DebriefFault): string {
     case 'R6':
       what = `signalled ${str(c.shown) ?? 'the wrong way'} instead of ${str(c.expected) ?? 'the right way'} when ${turn(c)}`;
       break;
+    case 'R7': {
+      const missed = Array.isArray(c.missed) ? c.missed.filter((x) => x === 'left' || x === 'right') : [];
+      const ways = missed.length === 1 ? missed[0] : 'left or right';
+      const where = c.action === 'roundabout' ? `the give-way line, ${turn(c)}` : `the line at a junction${c.action === 'left' || c.action === 'right' ? `, turning ${c.action}` : ''}`;
+      what = `didn't look ${ways} in the few seconds before crossing ${where}`;
+      break;
+    }
+    case 'R8': {
+      const missed = Array.isArray(c.missed) ? c.missed : [];
+      const checks = [missed.includes('mirror') ? 'the mirrors' : '', missed.includes('right') ? 'over the right shoulder (blind spot)' : ''].filter(Boolean);
+      what = `pulled away from the side of the road without checking ${checks.join(' or ') || 'all around'}`;
+      break;
+    }
     case 'R9': {
       const lanes = num(c.lanes);
       what = `approached in lane ${num(c.lane) ?? '?'} of ${lanes ?? '?'} (counting from the left) when ${turn(c)}; the correct lane was lane ${num(c.expectedLane) ?? '?'}`;

@@ -44,7 +44,7 @@ Plan and reasons in SPEC §16. The checkpoint build is tagged `checkpoint-2`. Wo
 | # | Session name | What it covers | Check |
 |---|---|---|---|
 | 12 | `early-finish` | Ending before the route is done is "test not finished", not a pass | ✅ done: Enter at 0 mph → "Test not finished" (UNFINISHED in Atlas); also on `main` |
-| 13 | `observation-rules` | R7 junction observation + moving off safely (mirrors and blind spot) | Rule tests with recorded traces |
+| 13 | `observation-rules` | R7 junction observation + moving off safely (mirrors and blind spot) | ✅ done: R7 at give-ways/roundabouts (Q+E, roundabout E only), R8 moving off (M+E); rule tests + debrief cites real rules |
 | 14 | `auto-routes` | Build test-style loops from the road graph (roundabout + lights + give-way), 3+ per centre | Routes build and drive end to end |
 | 15 | `mock-test` | Route picker + "surprise me", silent examiner, independent-driving stretch, fault limit scaled to drive length | A full mock test on a random route |
 | 16 | `off-route` | "That's fine, take the next left", then reroute back | Miss a turn → examiner recovers |

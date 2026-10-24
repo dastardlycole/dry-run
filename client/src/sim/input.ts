@@ -22,6 +22,8 @@ export class Input {
   private queue: Action[] = [];
   /** M went down since the fault engine last looked, so a quick tap between two frames still counts. */
   private mirrorTapped = false;
+  /** The same for Q and E (R7, R8). */
+  private lookTapped = { left: false, right: false };
 
   constructor(target: Window = window) {
     target.addEventListener('keydown', (e) => {
@@ -29,6 +31,8 @@ export class Input {
       // Repeats still mark the key as held: after a blur, a key held down only sends repeats.
       this.held.add(e.code);
       if (e.code === 'KeyM') this.mirrorTapped = true;
+      if (e.code === 'KeyQ') this.lookTapped.left = true;
+      if (e.code === 'KeyE') this.lookTapped.right = true;
       if (e.repeat) return;
       const action = ACTIONS[e.code];
       if (action) this.queue.push(action);
@@ -47,6 +51,13 @@ export class Input {
     const checked = this.mirror || this.mirrorTapped;
     this.mirrorTapped = false;
     return checked;
+  }
+
+  /** True for each side looked at (held, or pressed since the last call). Read once per frame by the fault engine (R7/R8). */
+  takeLooks(): { lookLeft: boolean; lookRight: boolean } {
+    const looks = { lookLeft: this.lookLeft || this.lookTapped.left, lookRight: this.lookRight || this.lookTapped.right };
+    this.lookTapped = { left: false, right: false };
+    return looks;
   }
 
   private any(...codes: string[]): boolean {

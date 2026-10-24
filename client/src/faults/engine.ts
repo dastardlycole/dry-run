@@ -1,10 +1,21 @@
 import type { Vec2 } from '../world/types';
-import { collision, mirrorBeforeSignal, newHistory, redLight, roundaboutLane, speeding, turns, type History } from './rules';
+import {
+  collision,
+  junctionObservation,
+  mirrorBeforeSignal,
+  movingOff,
+  newHistory,
+  redLight,
+  roundaboutLane,
+  speeding,
+  turns,
+  type History,
+} from './rules';
 import type { Fault, FaultContext, FaultEvent, Frame } from './types';
 
 // Runs the rules over the drive, one frame at a time (SPEC §4.6). Same frames in → same faults out.
 
-const RULES = [speeding, redLight, mirrorBeforeSignal, turns, roundaboutLane, collision];
+const RULES = [movingOff, speeding, redLight, mirrorBeforeSignal, turns, junctionObservation, roundaboutLane, collision];
 
 export class FaultEngine {
   private h: History = newHistory();
@@ -17,8 +28,10 @@ export class FaultEngine {
 
   step(f: Frame): Fault[] {
     const h = this.h;
-    // A mirror check or indicator showing in this frame counts for this frame's rules.
+    // A mirror check, look or indicator showing in this frame counts for this frame's rules.
     if (f.mirror) h.lastMirrorT = f.t;
+    if (f.lookLeft) h.lastLookT.left = f.t;
+    if (f.lookRight) h.lastLookT.right = f.t;
     if (f.indicator !== 'off') {
       h.lastOnT[f.indicator] = f.t;
       if (f.indicator !== (h.prev?.indicator ?? 'off')) h.signalFromT[f.indicator] = f.t;

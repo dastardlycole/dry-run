@@ -144,7 +144,8 @@
     "title": "Highway Code Rule 159",
     "text": "Before moving off you should\n- use all mirrors to check the road is clear\n- look round to check the blind spots (the areas you are unable to see in the mirrors)\n- signal if necessary before moving out\n- look round for a final check.\nMove off only when it is safe to do so.",
     "ruleIds": [
-      "R3"
+      "R3",
+      "R8"
     ]
   },
   {
@@ -176,6 +177,7 @@
     "text": "Take extra care at junctions. You should\n- watch out for cyclists, motorcyclists and pedestrians including powered wheelchairs/mobility scooter users as they are not always easy to see. Be aware that they may not have seen or heard you if you are approaching from behind\n- give way to pedestrians crossing or waiting to cross a road into which or from which you are turning. If they have started to cross they have priority, so give way (see Rule H2)\n- remain behind cyclists, horse riders, horse drawn vehicles and motorcyclists at junctions even if they are waiting to turn and are positioned close to the kerb\n- watch out for long vehicles which may be turning at a junction ahead; they may have to use the whole width of the road to make the turn (see Rule 221)\n- watch out for horse riders who may take a different line on the road from that which you would expect\n- not assume, when waiting at a junction, that a vehicle coming from the right and signalling left will actually turn. Wait and make sure\n- look all around before emerging. Do not cross or join a road until there is a gap large enough for you to do so safely.",
     "ruleIds": [
       "R4",
+      "R7",
       "R11"
     ]
   },
@@ -186,6 +188,7 @@
     "title": "Highway Code Rule 172",
     "text": "The approach to a junction may have a ‘Give Way’ sign or a triangle marked on the road. You MUST give way to traffic on the main road when emerging from a junction with broken white lines across the road.",
     "ruleIds": [
+      "R7",
       "R11"
     ]
   },
@@ -298,6 +301,7 @@
     "title": "Highway Code Rule 185",
     "text": "When reaching the roundabout you should\n- give priority to traffic approaching from your right, unless directed otherwise by signs, road markings or traffic lights\n- check whether road markings allow you to enter the roundabout without giving way. If so, proceed, but still look to the right before joining\n- watch out for all other road users already on the roundabout; be aware they may not be signalling correctly or at all\n- look forward before moving off to make sure traffic in front has moved off.",
     "ruleIds": [
+      "R7",
       "R11"
     ]
   },
@@ -320,6 +324,7 @@
     "title": "Highway Code Rule 187",
     "text": "In all cases watch out for and give plenty of room to\n- pedestrians who may be crossing the approach and exit roads\n- traffic crossing in front of you on the roundabout, especially vehicles intending to leave by the next exit\n- traffic which may be straddling lanes or positioned incorrectly\n- motorcyclists\n- long vehicles (including those towing trailers). These might have to take a different course or straddle lanes either approaching or on the roundabout because of their length. Watch out for their signals.",
     "ruleIds": [
+      "R7",
       "R11"
     ]
   },
@@ -399,6 +404,8 @@
       "R4",
       "R5",
       "R6",
+      "R7",
+      "R8",
       "R9",
       "R11"
     ]
