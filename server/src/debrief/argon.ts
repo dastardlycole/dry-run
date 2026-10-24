@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { wouldFail, type Result } from '../../../client/src/faults/result';
+import { MAX_DRIVING_FAULTS, wouldFail, type Result } from '../../../client/src/faults/result';
 import { RULE_NAMES } from '../../../client/src/faults/types';
 import { MAX_CITATIONS, MAX_SUMMARY_CHARS, MAX_TEXT_CHARS, type Explanation, type GuidanceChunk } from './check';
 import { describeFault, type DebriefFault } from './describe';
@@ -23,6 +23,8 @@ export interface ExplainRequest {
 export interface SummaryRequest {
   result: Result;
   counts: { driving: number; serious: number; dangerous: number };
+  /** The most driving faults a pass allowed on this route (scaled to its length). */
+  maxDrivingFaults?: number;
   /** Every fault, with its checked explanation where there is one. */
   faults: { fault: DebriefFault; place?: string; explanation: Explanation | null }[];
   /** The chunks the explanations cite: the only ones the summary may cite. */
@@ -84,13 +86,13 @@ export function explainPrompt({ fault, place, chunks, problems }: ExplainRequest
   ].join('\n');
 }
 
-export function summaryPrompt({ result, counts, faults, chunks, problems }: SummaryRequest): string {
+export function summaryPrompt({ result, counts, maxDrivingFaults = MAX_DRIVING_FAULTS, faults, chunks, problems }: SummaryRequest): string {
   return [
-    `Result: ${result} (${counts.driving} driving, ${counts.serious} serious, ${counts.dangerous} dangerous faults; a pass allows up to 15 driving faults and no serious or dangerous ones)`,
+    `Result: ${result} (${counts.driving} driving, ${counts.serious} serious, ${counts.dangerous} dangerous faults; on this route a pass allows up to ${maxDrivingFaults} driving faults (the real test's 15, scaled to a shorter drive) and no serious or dangerous ones)`,
     ...(result === 'UNFINISHED'
       ? [
           `The learner ended the test before the end of the route, so this test has no result: talk about the faults so far and never say they passed or failed. ${
-            wouldFail(counts)
+            wouldFail(counts, maxDrivingFaults)
               ? "Their faults so far would already have been a fail if the test had gone on: say that plainly, in those terms ('this would have been a fail')."
               : "Don't guess whether they would have passed."
           }`,

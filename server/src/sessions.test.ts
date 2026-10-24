@@ -30,11 +30,11 @@ beforeEach(async () => {
 });
 
 const startedAt = '2026-10-24T10:00:00.000Z';
-const start = (sessionId = 'sess-1') =>
+const start = (sessionId = 'sess-1', more: object = {}) =>
   app.inject({
     method: 'POST',
     url: '/api/sessions',
-    payload: { sessionId, learnerId: 'learner-1', centreId: 'wanstead', routeId: 'demo', startedAt },
+    payload: { sessionId, learnerId: 'learner-1', centreId: 'wanstead', routeId: 'demo', startedAt, ...more },
   });
 
 const event = (n: number, category: FaultEvent['category'] = 'driving', over: Partial<FaultEvent> = {}): FaultEvent => ({
@@ -130,9 +130,19 @@ describe('POST /api/sessions/:id/end', () => {
   it('passes with up to 15 driving faults', async () => {
     await send(Array.from({ length: 15 }, (_, i) => event(i + 1)));
     const res = (await end()).json();
-    expect(res).toEqual({ sessionId: 'sess-1', result: 'PASS', counts: { driving: 15, serious: 0, dangerous: 0 } });
+    expect(res).toEqual({ sessionId: 'sess-1', result: 'PASS', counts: { driving: 15, serious: 0, dangerous: 0 }, maxDrivingFaults: 15 });
     const s = await db.collection('sessions').findOne({ _id: 'sess-1' as never });
     expect(s).toMatchObject({ result: 'PASS', endedAt: new Date('2026-10-24T10:05:00.000Z') });
+  });
+
+  it('scales the limit to the route length sent at the start: 3 km allows 4', async () => {
+    await db.dropDatabase();
+    await start('sess-1', { routeLengthM: 3000 });
+    await send(Array.from({ length: 4 }, (_, i) => event(i + 1)));
+    expect((await end()).json()).toMatchObject({ result: 'PASS', maxDrivingFaults: 4 });
+    await send([event(5)]);
+    expect((await end()).json()).toMatchObject({ result: 'FAIL', maxDrivingFaults: 4 });
+    expect(await db.collection('sessions').findOne({ _id: 'sess-1' as never })).toMatchObject({ routeLengthM: 3000, maxDrivingFaults: 4 });
   });
 
   it('fails with 16 driving faults, or one dangerous', async () => {
@@ -160,7 +170,7 @@ describe('POST /api/sessions/:id/end', () => {
   it('saves a test ended early (Enter) or reset part-way (R) as UNFINISHED, never PASS', async () => {
     // No flag at all (an old client, a hand-made request) is never taken as finished.
     for (const body of [{ finished: false }, { abandoned: true }, {}, { finished: true, abandoned: true }]) {
-      expect((await endWith(body)).json()).toEqual({ sessionId: 'sess-1', result: 'UNFINISHED', counts: { driving: 0, serious: 0, dangerous: 0 } });
+      expect((await endWith(body)).json()).toEqual({ sessionId: 'sess-1', result: 'UNFINISHED', counts: { driving: 0, serious: 0, dangerous: 0 }, maxDrivingFaults: 15 });
       expect(await db.collection('sessions').findOne({ _id: 'sess-1' as never })).toMatchObject({ result: 'UNFINISHED' });
     }
   });

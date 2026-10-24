@@ -10,6 +10,8 @@ export interface SessionStart {
   learnerId: string;
   centreId: string;
   routeId: string;
+  /** Sets the test's driving fault limit on the server too. */
+  routeLengthM: number;
   /** ISO time. */
   startedAt: string;
 }
