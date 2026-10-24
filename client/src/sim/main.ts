@@ -60,6 +60,8 @@ const groundHalf = groundHalfM(CENTRE.radiusM);
 const groundCollider = world.createCollider(
   RAPIER.ColliderDesc.cuboid(groundHalf, 0.1, groundHalf).setTranslation(0, -0.1, 0),
 );
+// Which route to drive: ?route=auto-2 picks a generated one (assets/<centre>/route-<id>.json); default the demo.
+const routeId = new URLSearchParams(location.search).get('route')?.replace(/[^\w-]/g, '') || 'demo';
 // If the map can't load, keep going on plain grass so the car still drives.
 let mapNote = '';
 const [worldData, route] = await Promise.all([
@@ -69,7 +71,7 @@ const [worldData, route] = await Promise.all([
     return emptyWorld(CENTRE);
   }),
   // Without a route the car still drives, from the nearest main road to the centre.
-  loadRoute(CENTRE.id, 'demo').catch((err) => {
+  loadRoute(CENTRE.id, routeId).catch((err) => {
     console.error('[route] failed to load', err);
     mapNote += 'route failed to load · ';
     return null;

@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CENTRE } from '../../client/src/config';
 import type { Route, WorldData } from '../../client/src/world/types';
@@ -27,6 +27,8 @@ const save = (route: Route) => {
 };
 
 save(buildRoute(world, WANSTEAD_DEMO));
+// Old generated routes go first, so a map that now makes fewer routes doesn't keep stale ones.
+for (const f of readdirSync(dir)) if (/^route-auto-\d+\.json$/.test(f)) rmSync(resolve(dir, f));
 // Generated loops start where the demo does: outside the test centre.
 const autos = autoRoutes(world, { start: WANSTEAD_DEMO.waypoints[0] });
 for (const a of autos) save(a.route);
