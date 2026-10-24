@@ -37,9 +37,27 @@ Use the name in the first column for `/rename`. Tick off when committed. Times a
 | — | **freeze** | Bug fixes only, rehearse the drive 3 times | — | Sat 21:00 |
 | 11 | `submission` | README, videos, notes per track | Checklist in SPEC §14 | Sun 11:30 |
 
+## v2 features: "learn your test area" (branch `v2`, one session each, in order)
+
+Plan and reasons in SPEC §16. The checkpoint build is tagged `checkpoint-2`. Work on `v2`; merge into `main` (Railway deploys `main`) only when a step works end to end. Row 11 above still ships from `main`.
+
+| # | Session name | What it covers | Check |
+|---|---|---|---|
+| v1 | `early-finish` | Ending before the route is done is "test not finished", not a pass | Test: Enter at 0 mph → not a pass |
+| v2 | `observation-rules` | R7 junction observation + moving off safely (mirrors and blind spot) | Rule tests with recorded traces |
+| v3 | `auto-routes` | Build test-style loops from the road graph (roundabout + lights + give-way), 3+ per centre | Routes build and drive end to end |
+| v4 | `mock-test` | Route picker + "surprise me", silent examiner, independent-driving stretch, fault limit scaled to drive length | A full mock test on a random route |
+| v5 | `off-route` | "That's fine, take the next left", then reroute back | Miss a turn → examiner recovers |
+| v6 | `practice-mode` | Instructor voice coaching in the moment, repeat a junction, free drive | Fault → spoken tip at the junction |
+| v7 | `weak-junctions` | Learner history from Atlas, "your weak junctions" on the start screen | Shows real past drives |
+| v8 | `junction-tips` | Local advice per tricky junction, used in coaching and the debrief | Tips appear at the right junctions |
+| v9 | `manoeuvres` | Parallel park / bay park / pull up on the right, emergency stop | Each one marked by code |
+| v10 | `road-users` | A few cars at the roundabout and lights, pedestrians at the zebra | Faults for not giving way |
+| v11 | `any-centre` | Type a centre or postcode; server builds area + routes and caches them (Overture buildings, tree heights) | A second centre drivable with no hand work |
+
 ## Project notes
 
-- **It must look like the real place.** That's the moat: learners practise *their* test route, so it has to look like the streets they'll drive on test day. Otherwise it's just a random driving sim. Must-haves come first, but realism (`photoreal-tiles`) comes straight after the P0 checkpoint, before any P1 feature. Don't spend time polishing the boxy OSM look; it's the fallback.
+- **It must look like the real place.** That's the moat: learners practise *their* test area, so it has to look like the streets they'll drive on test day. Otherwise it's just a random driving sim. Must-haves come first, but realism (`photoreal-tiles`) comes straight after the P0 checkpoint, before any P1 feature. Don't spend time polishing the boxy OSM look; it's the fallback.
 
 - **The instructor heatmap (row 6) is not wanted.** It's built (Stream Processing → `junction_stats` → `/instructor` map, STATS19 crashes in Atlas), but I find it confusing and useless with one route. Don't spend more time on it or polish it; keep it only because the MongoDB track needs Stream Processing. Prefer learner-facing work and realism. Before building any feature, say plainly what the user will see and whether it'll look thin with our data.
 
