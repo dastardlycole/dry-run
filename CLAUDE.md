@@ -37,23 +37,26 @@ Use the name in the first column for `/rename`. Tick off when committed. Times a
 | — | **freeze** | Bug fixes only, rehearse the drive 3 times | — | Sat 21:00 |
 | 11 | `submission` | README, videos, notes per track | Checklist in SPEC §14 | Sun 11:30 |
 
-## New features: "learn your test area" (rows 12–22, on branch `v2`, one session each, in order)
+## New features: "learn your test area" (rows 12–22, on branch `v2`, one session each, in the order listed)
 
 Plan and reasons in SPEC §16. The checkpoint build is tagged `checkpoint-2`. Work on `v2`; merge into `main` (Railway deploys `main`) only when a step works end to end. Row 11 above still ships from `main`.
+
+**Why this order (24 Oct, 19:15):** the deadline is now midnight and the laptop keeps crashing, so rows are ranked by what judges will actually see, not by row number. The demo story is "type your test centre, drive a real route": `auto-routes` first (everything needs it), then `any-centre`, then `mock-test` to show the routes off. Above the cut line is the target; below it is bonus, and `road-users` / `manoeuvres` are skipped tonight. R7/R8 (row 13) are built but may never appear on camera, which is why polish like that now waits. Commit and push after every working step, not just at the end of a session.
 
 | # | Session name | What it covers | Check |
 |---|---|---|---|
 | 12 | `early-finish` | Ending before the route is done is "test not finished", not a pass | ✅ done: Enter at 0 mph → "Test not finished" (UNFINISHED in Atlas); also on `main` |
 | 13 | `observation-rules` | R7 junction observation + moving off safely (mirrors and blind spot) | ✅ done: R7 at give-ways/roundabouts (Q+E, roundabout E only), R8 moving off (M+E); rule tests + debrief cites real rules |
 | 14 | `auto-routes` | Build test-style loops from the road graph (roundabout + lights + give-way), 3+ per centre | Routes build and drive end to end |
+| 22 | `any-centre` | Type a centre or postcode; server builds area + routes and caches them (Overture buildings, tree heights) | A second centre drivable with no hand work |
 | 15 | `mock-test` | Route picker + "surprise me", silent examiner, independent-driving stretch, fault limit scaled to drive length | A full mock test on a random route |
-| 16 | `off-route` | "That's fine, take the next left", then reroute back | Miss a turn → examiner recovers |
+| — | **midnight cut line** | Done by midnight 24 Oct. If `any-centre` isn't working by ~22:30, use plan B: pre-build 2–3 centres and the postcode box picks the nearest | — |
 | 17 | `practice-mode` | Instructor voice coaching in the moment, repeat a junction, free drive | Fault → spoken tip at the junction |
 | 18 | `weak-junctions` | Learner history from Atlas, "your weak junctions" on the start screen | Shows real past drives |
+| 16 | `off-route` | "That's fine, take the next left", then reroute back | Miss a turn → examiner recovers |
 | 19 | `junction-tips` | Local advice per tricky junction, used in coaching and the debrief | Tips appear at the right junctions |
-| 20 | `manoeuvres` | Parallel park / bay park / pull up on the right, emergency stop | Each one marked by code |
 | 21 | `road-users` | A few cars at the roundabout and lights, pedestrians at the zebra | Faults for not giving way |
-| 22 | `any-centre` | Type a centre or postcode; server builds area + routes and caches them (Overture buildings, tree heights) | A second centre drivable with no hand work |
+| 20 | `manoeuvres` | Parallel park / bay park / pull up on the right, emergency stop | Each one marked by code |
 
 ## Project notes
 
