@@ -1,17 +1,26 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color: #eee; font-family: system-ui, sans-serif; }
 #scene, #map { position: absolute; inset: 0; width: 100%; height: 100%; }
 #hud { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; gap: 4px; }
-#speed { font-size: 32px; font-weight: 700; }
 #status { font-size: 12px; opacity: 0.7; }
 .attribution { position: absolute; bottom: 4px; right: 8px; font-size: 11px; opacity: 0.8; }
 .attribution a { color: inherit; }
-#speedo { display: flex; align-items: center; gap: 12px; }
-.indicator { font-size: 28px; color: #2a4; opacity: 0.2; }
+#dash { position: absolute; right: 16px; bottom: 24px; display: flex; align-items: center; gap: 6px; pointer-events: none; }
+#dial { position: relative; width: 140px; height: 140px; }
+#dial svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+#dial .face { fill: rgba(12, 15, 18, 0.78); stroke: #4a525c; stroke-width: 2; }
+#dial .hub { fill: #ddd; }
+#dial-ticks line { stroke: #cfd6dd; stroke-width: 2; }
+#dial-ticks line.minor { stroke-width: 1; opacity: 0.5; }
+#dial-ticks text { fill: #cfd6dd; font-size: 10px; text-anchor: middle; dominant-baseline: central; }
+#needle { stroke: #ff5a3c; stroke-width: 3; stroke-linecap: round; }
+#dial #speed { position: absolute; left: 0; right: 0; top: 84px; font-size: 22px; font-weight: 700; text-align: center; line-height: 1; }
+#dial .unit { position: absolute; left: 0; right: 0; top: 106px; font-size: 10px; text-align: center; opacity: 0.7; }
+#dial #gear { position: absolute; left: 0; right: 0; top: 40px; font-size: 13px; font-weight: 700; text-align: center; opacity: 0.8; }
+.indicator { font-size: 30px; color: #2a4; opacity: 0.2; }
 .indicator.on { opacity: 1; text-shadow: 0 0 8px #3f6; }
 #gear-row { font-size: 14px; }
-#gear { font-weight: 700; }
-#hud, #help { text-shadow: 0 1px 3px #000; }
-#help { position: absolute; bottom: 8px; left: 12px; font-size: 12px; opacity: 0.85; line-height: 1.5; }
+#hud, #help, #dash { text-shadow: 0 1px 3px #000; }
+#help { position: absolute; bottom: 8px; left: 12px; max-width: calc(100% - 260px); font-size: 12px; opacity: 0.85; line-height: 1.5; }
 #bump { position: absolute; top: 40%; left: 50%; transform: translateX(-50%); font-size: 28px; font-weight: 700; color: #f44; text-shadow: 0 1px 4px #000; }
 #paused { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px 16px; box-sizing: border-box; overflow: auto; background: rgba(0, 0, 0, 0.6); }
 #paused .title { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 40px; font-weight: 700; }
@@ -45,7 +54,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color:
 #examiner .cite { padding: 1px 8px; border-radius: 10px; background: #33404c; color: #9fd0ff; font-size: 12px; }
 #examiner .more { font-size: 11px; opacity: 0.55; }
 /* Narrower windows: below the top bar and fault chips rather than over them. */
-@media (max-width: 1250px) { #examiner { top: auto; bottom: 150px; } }
+@media (max-width: 1250px) { #examiner { top: auto; bottom: 190px; } }
+@media (max-width: 1200px) { #caption { bottom: 180px; } }
 #caption { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); max-width: min(720px, calc(100% - 32px)); padding: 8px 16px; border-radius: 6px; background: rgba(0, 0, 0, 0.65); font-size: 18px; text-align: center; }
 #result { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.6); }
 :is(#result, #pause-card) .card { width: min(760px, 100%); box-sizing: border-box; max-height: 100%; overflow: auto; padding: 20px 24px; border-radius: 10px; background: #1b1f24; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); }

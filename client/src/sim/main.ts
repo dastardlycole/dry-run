@@ -9,6 +9,7 @@ import { tellMeFault, type TellMeAnswer } from '../examiner/tell-me';
 import { TellMe } from '../examiner/tell-me-live';
 import { PRACTICE_OPENING, tipFor } from '../examiner/tips';
 import { Voice } from '../examiner/voice';
+import { EngineSound } from './engine-sound';
 import { FaultEngine, toFaultEvent, type SessionInfo } from '../faults/engine';
 import { speedLimitAt } from '../faults/limits';
 import { countFaults, drivingFaultLimit, resultOf } from '../faults/result';
@@ -179,6 +180,12 @@ let simTime = 0;
 const cameras = new Cameras(car);
 const input = new Input();
 const hud = new Hud();
+const engine = new EngineSound();
+/** No engine or indicator sound right now (see the frame loop). */
+let carQuiet = true;
+hud.onBlink = (on) => {
+  if (!carQuiet) engine.tick(on);
+};
 const examinerPanel = new ExaminerPanel();
 // The place line at the top: the road the car is on and the area. Looked up twice a second, not every frame
 // (thousands of road pieces); on an unnamed road it keeps the last name.
@@ -476,6 +483,7 @@ renderer.setAnimationLoop((now: number) => {
       if (!resultScreen.visible) setPaused(!paused);
     }
     else if (action === 'camera') cameras.toggle();
+    else if (action === 'engineSound') engine.muted = !engine.muted;
     else if (action === 'guide') {
       if (guide) guide.mesh.visible = !guide.mesh.visible;
     }
@@ -575,7 +583,14 @@ renderer.setAnimationLoop((now: number) => {
     hud.showPlace(roadName ? `${roadName} · ${area}` : area);
     if (!route) freeLimitMph = speedLimitAt([car.mesh.position.x, car.mesh.position.z], worldData.graph.edges);
   }
+  // Silent while nothing is being driven, and during the 'tell me' question so the mic hears only the learner.
+  carQuiet = paused || choosing || resultScreen.visible || tellMe.busy;
   hud.update({ speedMph: car.speedMph, gear: car.gear, indicator, camera: cameras.mode, paused }, now);
+  {
+    const pedals = input.drive();
+    const pressing = car.gear === 'D' ? pedals.throttle : pedals.brake;
+    engine.update(car.speedMph, pressing, voice.talking, carQuiet);
+  }
   renderer.shadowMap.needsUpdate = true;
   cameras.render(renderer, scene);
 });
@@ -583,7 +598,7 @@ renderer.setAnimationLoop((now: number) => {
 // Handy for poking at the sim from the browser console during development.
 if (import.meta.env.DEV) Object.assign(window, {
     sim: {
-      car, input, world, cameras, renderer, scene, route, lights, progress, voice, time: () => simTime,
+      car, input, world, cameras, renderer, scene, route, lights, progress, voice, engine, time: () => simTime,
       /** Puts the car `m` metres along the demo route, facing along it (for checking how places look). */
       goto: placeAlongRoute,
       /** Downloads the drive since the last reset as a Frame[] JSON, for use as a fault test trace. */

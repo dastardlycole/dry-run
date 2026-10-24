@@ -9,17 +9,27 @@
   <body>
     <canvas id="scene"></canvas>
     <div id="hud">
-      <div id="speedo">
-        <span id="ind-left" class="indicator">◀</span>
-        <div id="speed">0 mph</div>
-        <span id="ind-right" class="indicator">▶</span>
-      </div>
-      <div id="gear-row">Gear <span id="gear">D</span> · <span id="cam-mode">Driver view</span></div>
+      <div id="gear-row"><span id="cam-mode">Driver view</span></div>
       <div id="status">connecting…</div>
+    </div>
+    <div id="dash">
+      <span id="ind-left" class="indicator">◀</span>
+      <div id="dial">
+        <svg viewBox="0 0 140 140" aria-hidden="true">
+          <circle cx="70" cy="70" r="66" class="face" />
+          <g id="dial-ticks"></g>
+          <line id="needle" x1="70" y1="78" x2="70" y2="16" />
+          <circle cx="70" cy="70" r="5" class="hub" />
+        </svg>
+        <div id="speed">0</div>
+        <div class="unit">mph</div>
+        <div id="gear">D</div>
+      </div>
+      <span id="ind-right" class="indicator">▶</span>
     </div>
     <div id="help">
       <b>W/S</b> or <b>↑/↓</b> drive / brake (hold S when stopped to reverse) · <b>A/D</b> steer · <b>Space</b> handbrake<br />
-      <b>Z/X</b> indicate left/right · <b>M</b> mirror · <b>Q/E</b> look left/right · <b>C</b> camera · <b>Esc</b> pause · <b>R</b> reset · <b>G</b> route arrows · <span id="help-repeat" hidden><b>J</b> repeat the last junction · </span><b>Enter</b> end the <span id="help-end">test</span> · <a href="/" id="change-centre">change route, mode or test centre</a>
+      <b>Z/X</b> indicate left/right · <b>M</b> mirror · <b>Q/E</b> look left/right · <b>C</b> camera · <b>Esc</b> pause · <b>R</b> reset · <b>G</b> route arrows · <b>N</b> engine sound · <span id="help-repeat" hidden><b>J</b> repeat the last junction · </span><b>Enter</b> end the <span id="help-end">test</span> · <a href="/" id="change-centre">change route, mode or test centre</a>
     </div>
     <div id="bump" hidden>Collision!</div>
     <div id="topbar">

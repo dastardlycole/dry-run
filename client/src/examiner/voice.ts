@@ -20,8 +20,15 @@ interface Line {
 /** /audio/manifest.json: sentence → file name in /audio. */
 export type AudioManifest = Record<string, string>;
 
+let sharedCtx: AudioContext | null = null;
+
+/** The page's one AudioContext, shared by the examiner's voice and the engine sound (sim/engine-sound.ts). */
+export function sharedAudio(): AudioContext | null {
+  if (!sharedCtx && typeof AudioContext !== 'undefined') sharedCtx = new AudioContext();
+  return sharedCtx;
+}
+
 export class Voice {
-  private ctx: AudioContext | null = null;
   private manifest: AudioManifest = {};
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
   private queue: Line[] = [];
@@ -40,6 +47,8 @@ export class Voice {
         for (const text of Object.keys(m)) this.buffer(text);
       })
       .catch(() => console.warn('[voice] no audio manifest; using the browser voice'));
+    // Chrome fills in its voice list a moment after it's first asked for, so ask now, well before any fallback speech.
+    if (typeof speechSynthesis !== 'undefined') speechSynthesis.getVoices();
     // Browsers only allow sound after the user has done something, so unlock on the first key or click.
     const unlock = () => {
       this.audio()?.resume();
@@ -90,11 +99,15 @@ export class Voice {
     this.busy = false;
   }
 
+  /** True while the examiner is saying something (the engine sound ducks under it). */
+  get talking(): boolean {
+    return this.busy;
+  }
+
   private current: AudioBufferSourceNode | null = null;
 
   private audio(): AudioContext | null {
-    if (!this.ctx && typeof AudioContext !== 'undefined') this.ctx = new AudioContext();
-    return this.ctx;
+    return sharedAudio();
   }
 
   private buffer(text: string): Promise<AudioBuffer | null> {
@@ -169,6 +182,17 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), ms))]);
 }
 
+const MALE = /\b(male|daniel|george|ryan|arthur|oliver|thomas|alfie|noah)\b/i;
+
+/**
+ * A British voice for the browser fallback, male where there is one so it matches the Gemini clips (Charon).
+ * Some browsers report the language as en_GB.
+ */
+export function pickVoice<V extends { lang: string; name: string }>(voices: readonly V[]): V | undefined {
+  const british = voices.filter((v) => v.lang.replace('_', '-').toLowerCase() === 'en-gb');
+  return british.find((v) => MALE.test(v.name) && !/female/i.test(v.name)) ?? british[0];
+}
+
 /** Kept so Chrome doesn't garbage-collect the utterance mid-sentence and never fire its end event. */
 let speaking: SpeechSynthesisUtterance | null = null;
 
@@ -189,7 +213,7 @@ function speak(text: string, done: () => void) {
   const u = new SpeechSynthesisUtterance(text);
   speaking = u;
   u.lang = 'en-GB';
-  const voice = speechSynthesis.getVoices().find((v) => v.lang === 'en-GB');
+  const voice = pickVoice(speechSynthesis.getVoices());
   if (voice) u.voice = voice;
   u.rate = 0.95;
   u.onend = finish;

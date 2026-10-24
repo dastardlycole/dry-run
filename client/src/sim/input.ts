@@ -1,7 +1,7 @@
 import type { DriveInput } from './controls';
 
 // One-press actions. Held keys (driving, look, mirror) are read every frame instead.
-export type Action = 'indicateLeft' | 'indicateRight' | 'camera' | 'pause' | 'reset' | 'guide' | 'end' | 'repeat';
+export type Action = 'indicateLeft' | 'indicateRight' | 'camera' | 'pause' | 'reset' | 'guide' | 'end' | 'repeat' | 'engineSound';
 
 const ACTIONS: Record<string, Action> = {
   KeyZ: 'indicateLeft',
@@ -11,6 +11,7 @@ const ACTIONS: Record<string, Action> = {
   KeyR: 'reset',
   KeyG: 'guide',
   KeyJ: 'repeat',
+  KeyN: 'engineSound',
   Enter: 'end',
   NumpadEnter: 'end',
 };
