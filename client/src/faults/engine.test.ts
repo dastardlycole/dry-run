@@ -162,6 +162,30 @@ describe('R5 no signal before turn', () => {
     expect(rules(drive(route, { mph: MPH, controls }))).toEqual([`R5:driving:${s7.junctionId}`]);
   });
 
+  it("doesn't mark a turn the car drove straight past (a missed turn), with no mirror or signal", () => {
+    // Up to the junction, then straight on: its place along the route stays at the junction as the car
+    // moves away from the exit road.
+    const controls = withChange(s7.atM - 100, Infinity, () => ({ indicator: 'off', mirror: false }));
+    const upTo = drive(route, { mph: MPH, toM: s7.atM + 0.5, controls });
+    const last = upTo[upTo.length - 1];
+    const straightOn = Array.from({ length: 90 }, (_, i): Frame => ({
+      ...last,
+      t: last.t + (i + 1) / 30,
+      routeM: last.routeM + Math.min(i, 3) * 0.3,
+      offRouteM: (i + 1) * 0.37,
+    }));
+    expect(rules([...upTo, ...straightOn])).toEqual([]);
+  });
+
+  it('marks the turn once the car is on the exit road, timed at the junction', () => {
+    const controls = withChange(s7.atM - 100, s7.atM + 10, () => ({ indicator: 'off' }));
+    const frames = drive(route, { mph: MPH, controls });
+    const faults = runTrace(ctx(), frames);
+    expect(faults.map((f) => f.ruleId)).toEqual(['R5']);
+    const atJunction = frames.find((f) => f.routeM >= s7.atM)!;
+    expect(faults[0].t).toBe(atJunction.t);
+  });
+
   it('needs a right signal for the third exit of three at the roundabout', () => {
     expect(expectedSignal(step('s4'))).toBe('right');
     const rb = (exit: number, exits: number) => expectedSignal({ ...step('s4'), exit, exits } as RouteStep);

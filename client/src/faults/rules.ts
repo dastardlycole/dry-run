@@ -1,3 +1,4 @@
+import { OFF_ROUTE_M } from '../examiner/director';
 import type { Indicator } from '../sim/controls';
 import type { RouteStep, Vec2 } from '../world/types';
 import type { Fault, FaultContext, Frame } from './types';
@@ -13,6 +14,12 @@ export const MIRROR_BEFORE_TURN_S = 5;
 export const SIGNAL_BEFORE_TURN_S = 3;
 /** A turn only counts when the car is this close to the route's driving line (it really took the route). */
 export const ON_ROUTE_M = 8;
+/**
+ * A left or right turn is only judged once the car is this far down the exit road (still on the route): going
+ * straight past a turn (a missed turn) isn't marked as a turn without a signal. Further than OFF_ROUTE_M from
+ * the route first, it was missed, and nothing is marked for it.
+ */
+export const EXIT_CONFIRM_M = 15;
 /** R9 judges the lane from where the car sat over this much road before the give-way line. */
 export const LANE_SAMPLE_M = 20;
 /** R11: contact this soon after the last one is the same crash (bouncing off and back in, or scraping along a wall). */
@@ -39,6 +46,8 @@ export interface History {
   /** When each indicator was last switched on, and when the car last made a turn on the route. */
   signalFromT: Record<'left' | 'right', number>;
   lastTurnT: number;
+  /** Turn faults worked out at the junction, waiting for the car to be seen on the exit road. */
+  pendingTurns: { confirmAtM: number; faults: Fault[] }[];
   /** When the current speeding spell started (and its +10 mph part), and what's been marked in it. */
   overSince: number | null;
   seriousSince: number | null;
@@ -57,6 +66,7 @@ export const newHistory = (): History => ({
   lastOnT: { left: -Infinity, right: -Infinity },
   signalFromT: { left: -Infinity, right: -Infinity },
   lastTurnT: -Infinity,
+  pendingTurns: [],
   overSince: null,
   seriousSince: null,
   markedDriving: false,
@@ -156,29 +166,48 @@ export function mirrorBeforeSignal(f: Frame, h: History, ctx: FaultContext): Fau
   return [fault(f, 'R3', 'driving', nearestJunctionId(f.pos, ctx.junctions), { indicator: f.indicator })];
 }
 
-/** R4–R6, judged as the car reaches each turn on the route. */
+/**
+ * R4–R6, judged as the car reaches each turn on the route. A roundabout's are marked there (at its give-way
+ * line: you can't drive past one); a left or right turn's are held until the car is on the exit road.
+ */
 export function turns(f: Frame, h: History, ctx: FaultContext): Fault[] {
   const out: Fault[] = [];
+  h.pendingTurns = h.pendingTurns.filter((p) => {
+    if (crossed(h.prev, f, p.confirmAtM)) out.push(...p.faults);
+    else if (f.offRouteM <= OFF_ROUTE_M) return true;
+    return false;
+  });
   for (const s of ctx.steps) {
     if (!isTurn(s) || !crossed(h.prev, f, turnPointM(s))) continue;
     const lastTurnT = h.lastTurnT;
     h.lastTurnT = f.t;
-    const context = stepContext(s);
-    // R4: no mirror check in the 5 s before the turn.
-    if (f.t - h.lastMirrorT > MIRROR_BEFORE_TURN_S) out.push(fault(f, 'R4', 'driving', s.junctionId, context));
-    const want = expectedSignal(s);
-    if (want === 'off') continue;
-    const other = want === 'left' ? 'right' : 'left';
-    // R6: the other indicator was showing. That's the fault even if the right one came on too, and
-    // it isn't also marked as no signal (R5). A signal still on from the last turn (e.g. left through
-    // the lights just before a roundabout) doesn't count: only one switched on since then.
-    if (f.t - h.lastOnT[other] <= SIGNAL_BEFORE_TURN_S && h.signalFromT[other] > lastTurnT) {
-      out.push(fault(f, 'R6', 'driving', s.junctionId, { ...context, expected: want, shown: other }));
-    } else if (f.t - h.lastOnT[want] > SIGNAL_BEFORE_TURN_S) {
-      out.push(fault(f, 'R5', 'driving', s.junctionId, { ...context, expected: want }));
+    if (s.action === 'roundabout') {
+      judgeTurn(f, h, s, lastTurnT, out);
+      continue;
     }
+    const faults: Fault[] = [];
+    judgeTurn(f, h, s, lastTurnT, faults);
+    if (faults.length) h.pendingTurns.push({ confirmAtM: s.atM + EXIT_CONFIRM_M, faults });
   }
   return out;
+}
+
+/** R4–R6 at turn step `s`, added to `out`. `lastTurnT`: when the turn before it was made. */
+function judgeTurn(f: Frame, h: History, s: RouteStep, lastTurnT: number, out: Fault[]) {
+  const context = stepContext(s);
+  // R4: no mirror check in the 5 s before the turn.
+  if (f.t - h.lastMirrorT > MIRROR_BEFORE_TURN_S) out.push(fault(f, 'R4', 'driving', s.junctionId, context));
+  const want = expectedSignal(s);
+  if (want === 'off') return;
+  const other = want === 'left' ? 'right' : 'left';
+  // R6: the other indicator was showing. That's the fault even if the right one came on too, and
+  // it isn't also marked as no signal (R5). A signal still on from the last turn (e.g. left through
+  // the lights just before a roundabout) doesn't count: only one switched on since then.
+  if (f.t - h.lastOnT[other] <= SIGNAL_BEFORE_TURN_S && h.signalFromT[other] > lastTurnT) {
+    out.push(fault(f, 'R6', 'driving', s.junctionId, { ...context, expected: want, shown: other }));
+  } else if (f.t - h.lastOnT[want] > SIGNAL_BEFORE_TURN_S) {
+    out.push(fault(f, 'R5', 'driving', s.junctionId, { ...context, expected: want }));
+  }
 }
 
 /**
