@@ -39,7 +39,7 @@ describe('Director', () => {
 
   it('gives a nearby first direction with the opening, before the car moves', () => {
     const d = new Director(directions);
-    expect(d.update(0, 0)).toEqual([OPENING, 'At the lights, turn left onto High Street.']);
+    expect(d.update(0, 0)).toEqual([OPENING, 'At the lights, turn left.']);
   });
 
   it("doesn't give the next direction until the car is past the last manoeuvre", () => {
@@ -71,7 +71,7 @@ describe('Director', () => {
     d.reset();
     expect(d.update(0, 0)).toEqual([OPENING, directions[0].text]);
     // Jumped past the first manoeuvres: the right turn into Spratt Hall Road is next.
-    expect(d.update(1000, 10)).toEqual(['Take the next road on the right onto Spratt Hall Road.']);
+    expect(d.update(1000, 10)).toEqual(['Take the next road on the right.']);
   });
 
   it('still gives skipped directions if the car turns out not to have passed them', () => {

@@ -1,6 +1,8 @@
 import { speechSeconds } from './director';
+import { sentencesOf } from './phrases';
 
-// The examiner's voice (SPEC §4.5 FR-E1): pre-made Gemini TTS audio from /audio (tools/src/gen-tts.ts),
+// The examiner's voice (SPEC §4.5 FR-E1): pre-made Gemini TTS audio from /audio (tools/src/gen-tts.ts, every
+// sentence in phrases.ts everyPhrase),
 // or the browser's own speech when a sentence has no file. Nothing here ever makes driving wait:
 // `say` returns at once and sentences play one after another in the background. `sayAudio` plays audio made
 // on the fly instead (the examiner's summary, from the server).
@@ -103,7 +105,7 @@ export class Voice {
     return b;
   }
 
-  private async playNext() {
+  private async playNext(): Promise<void> {
     const line = this.queue.shift();
     if (line === undefined) {
       this.busy = false;
@@ -111,6 +113,13 @@ export class Voice {
     }
     const { text, audio, caption } = line;
     this.busy = true;
+    // A joined direction ("… Then at the roundabout, …") has a file per sentence: play them back to back.
+    const parts = sentencesOf(text);
+    if (!audio && !this.manifest[text] && parts.length > 1 && parts.every((p) => this.manifest[p])) {
+      if (caption) this.onSpeak(text);
+      this.queue.unshift(...parts.map((p) => ({ text: p, caption: false })));
+      return this.playNext();
+    }
     const gen = this.generation;
     const done = () => {
       if (gen === this.generation) this.playNext();

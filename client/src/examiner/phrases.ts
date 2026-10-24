@@ -3,7 +3,8 @@ import type { Route, RouteStep } from '../world/types';
 // What the examiner says, built from the route's steps (SPEC §4.4 FR-R2). Pure: tools/src/gen-tts.ts
 // uses this too, so the cached audio always matches the words the sim asks for.
 // Like a real test: "follow the road ahead" is said once at the start, then only turns, roundabouts
-// and the final pull-up get a direction.
+// and the final pull-up get a direction. Road names aren't said (examiners mostly don't), so every
+// sentence comes from a small fixed set: one batch of Gemini audio covers every centre and route.
 
 export const OPENING = "Follow the road ahead unless traffic signs direct you otherwise. When you're ready, drive on.";
 
@@ -30,13 +31,6 @@ export const JOIN_GAP_M = 100;
 
 const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth'];
 
-/** Road numbers like "A1008" or "B123" aren't read out; only real street names are. */
-const isNamed = (road: string) => road !== '' && !/^[ABM]\d+/i.test(road);
-
-function onto(step: RouteStep): string {
-  return isNamed(step.toRoad) && step.toRoad !== step.fromRoad ? ` onto ${step.toRoad}` : '';
-}
-
 /** The sentence for one step, or null when nothing needs saying (straight on). */
 export function phraseFor(step: RouteStep): string | null {
   switch (step.action) {
@@ -44,13 +38,13 @@ export function phraseFor(step: RouteStep): string | null {
       return "Pull up on the left when it's safe.";
     case 'roundabout': {
       const exit = ORDINALS[(step.exit ?? 1) - 1] ?? `number ${step.exit}`;
-      return `At the roundabout, take the ${exit} exit${onto(step)}.`;
+      return `At the roundabout, take the ${exit} exit.`;
     }
     case 'left':
     case 'right':
-      if (step.control === 'signals') return `At the lights, turn ${step.action}${onto(step)}.`;
-      if (step.control === 'giveway' || step.control === 'stop') return `At the end of the road, turn ${step.action}${onto(step)}.`;
-      return `Take the next road on the ${step.action}${onto(step)}.`;
+      if (step.control === 'signals') return `At the lights, turn ${step.action}.`;
+      if (step.control === 'giveway' || step.control === 'stop') return `At the end of the road, turn ${step.action}.`;
+      return `Take the next road on the ${step.action}.`;
     case 'ahead':
       return null;
   }
@@ -66,7 +60,7 @@ export function routeDirections(route: Pick<Route, 'steps'>): Direction[] {
     const prev = out[out.length - 1];
     // Only two in one sentence; a third would be too much to take in.
     if (prev && !joined && step.atM - prev.atM < JOIN_GAP_M) {
-      prev.text = `${prev.text.slice(0, -1)}, then ${text[0].toLowerCase()}${text.slice(1)}`;
+      prev.text = `${prev.text} ${then(text)}`;
       prev.endM = step.atM;
       joined = true;
     } else {
@@ -77,7 +71,21 @@ export function routeDirections(route: Pick<Route, 'steps'>): Direction[] {
   return out;
 }
 
-/** Every sentence the examiner can say on this route (for pre-generating audio). */
-export function allPhrases(route: Pick<Route, 'steps'>): string[] {
-  return [...new Set([OPENING, ...routeDirections(route).map((d) => d.text), END_PASS, END_FAIL, END_UNFINISHED])];
+/** The second of two joined directions, said as its own sentence so it has its own audio. */
+const then = (text: string) => `Then ${text[0].toLowerCase()}${text.slice(1)}`;
+
+/** The sentences a direction is said in (a joined one is two). */
+export const sentencesOf = (text: string) => text.split(/(?<=\.) (?=Then )/);
+
+/** Every sentence the examiner can say, on any route (for pre-generating audio). */
+export function everyPhrase(): string[] {
+  const steps: Partial<RouteStep>[] = [
+    ...ORDINALS.map((_, i) => ({ action: 'roundabout' as const, exit: i + 1 })),
+    ...(['left', 'right'] as const).flatMap((action) =>
+      (['signals', 'giveway', 'none'] as const).map((control) => ({ action, control })),
+    ),
+    { action: 'end' },
+  ];
+  const directions = steps.map((s) => phraseFor(s as RouteStep)!);
+  return [OPENING, ...directions, ...directions.map(then), END_PASS, END_FAIL, END_UNFINISHED];
 }
