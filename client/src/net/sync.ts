@@ -20,10 +20,19 @@ export interface Saved {
   counts: Counts;
 }
 
+/**
+ * How a test ended. `finished`: driven to the end (PASS or FAIL). `unfinished`: Enter before the end of the
+ * route (UNFINISHED, still with the examiner's summary). `abandoned`: R part-way (UNFINISHED, and no summary:
+ * the result screen is already gone).
+ */
+export type SessionEnd = 'finished' | 'unfinished' | 'abandoned';
+
 type Job =
   | { kind: 'start'; body: SessionStart }
   | { kind: 'events'; events: FaultEvent[] }
-  | { kind: 'end'; sessionId: string; endedAt: string; abandoned: boolean };
+  | { kind: 'end'; sessionId: string; endedAt: string; how: SessionEnd };
+
+const END_BODY: Record<SessionEnd, object> = { finished: { finished: true }, unfinished: { finished: false }, abandoned: { abandoned: true } };
 
 export const SEND_EVERY_MS = 1000;
 /** The server takes up to 500 per batch. */
@@ -67,11 +76,10 @@ export class Sync {
     if (!this.dropped.has(event.sessionId)) this.faults.push(event);
   }
 
-  /** `abandoned`: reset part-way, so the server keeps the faults but writes no examiner's summary. */
-  endSession(sessionId: string, endedAt: string, abandoned = false) {
+  endSession(sessionId: string, endedAt: string, how: SessionEnd = 'finished') {
     if (this.dropped.has(sessionId)) return;
     this.batchFaults();
-    this.jobs.push({ kind: 'end', sessionId, endedAt, abandoned });
+    this.jobs.push({ kind: 'end', sessionId, endedAt, how });
   }
 
   /** True while anything for `sessionId` is still waiting to be sent. */
@@ -137,7 +145,7 @@ export class Sync {
         ? ['/api/sessions', job.body]
         : job.kind === 'events'
           ? ['/api/events', { events: job.events }]
-          : [`/api/sessions/${encodeURIComponent(job.sessionId)}/end`, { endedAt: job.endedAt, ...(job.abandoned ? { abandoned: true } : {}) }];
+          : [`/api/sessions/${encodeURIComponent(job.sessionId)}/end`, { endedAt: job.endedAt, ...END_BODY[job.how] }];
     return this.send(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   }
 

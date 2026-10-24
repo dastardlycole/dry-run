@@ -14,7 +14,8 @@
     "stream": "tsx src/stream-setup.ts",
     "ingest-guidance": "tsx src/ingest-guidance.ts",
     "guidance-check": "tsx src/guidance-check.ts",
-    "seed-demo": "tsx src/seed-demo.ts"
+    "seed-demo": "tsx src/seed-demo.ts",
+    "mark-unfinished": "tsx src/mark-unfinished.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.4.0",

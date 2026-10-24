@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { MongoBulkWriteError, type Db } from 'mongodb';
-import { countFaults, resultOf } from '../../client/src/faults/result';
+import { countFaults, resultOf, type Result } from '../../client/src/faults/result';
 import type { FaultEvent } from '../../client/src/faults/types';
 
 // Sessions and fault events (SPEC §7, §9 API). The client makes the session id itself, so a drive that
@@ -14,9 +14,9 @@ export interface SessionDoc {
   routeId: string;
   startedAt: Date;
   endedAt?: Date;
-  /** Reset part-way (R): the faults so far are kept, but it isn't a finished test. */
+  /** Reset part-way (R): result UNFINISHED and no examiner's summary, as the result screen is already gone. */
   abandoned?: boolean;
-  result?: 'PASS' | 'FAIL';
+  result?: Result;
   counts?: { driving: number; serious: number; dangerous: number };
 }
 
@@ -81,7 +81,7 @@ const endBody = {
   type: 'object',
   required: ['endedAt'],
   additionalProperties: false,
-  properties: { endedAt: time, abandoned: { type: 'boolean' } },
+  properties: { endedAt: time, finished: { type: 'boolean' }, abandoned: { type: 'boolean' } },
 };
 
 /** The fault_events indexes from SPEC §7. Safe to run on every start. */
@@ -147,7 +147,7 @@ export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>, ho
     return { inserted: docs.length - duplicates, duplicates };
   });
 
-  app.post<{ Params: { id: string }; Body: { endedAt: string; abandoned?: boolean } }>(
+  app.post<{ Params: { id: string }; Body: { endedAt: string; finished?: boolean; abandoned?: boolean } }>(
     '/api/sessions/:id/end',
     { schema: { body: endBody, params: { type: 'object', properties: { id } } } },
     async (req, reply) => {
@@ -156,13 +156,15 @@ export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>, ho
       if (!(await col.findOne({ _id: sessionId }))) return reply.code(404).send({ error: 'unknown session' });
       const saved = await (await events()).find({ sessionId }, { projection: { category: 1 } }).toArray();
       const counts = countFaults(saved);
-      const result = resultOf(counts);
       const abandoned = req.body.abandoned === true;
+      // Only the sim knows if the route was driven to the end, so it has to say so: anything else (an old
+      // client, a hand-made request) is UNFINISHED, never a pass. The faults are still counted here.
+      const result = resultOf(counts, req.body.finished === true && !abandoned);
       await col.updateOne(
         { _id: sessionId },
         { $set: { endedAt: new Date(req.body.endedAt), result, counts, ...(abandoned ? { abandoned } : {}) } },
       );
-      // No examiner's summary for a test the learner gave up on.
+      // No examiner's summary for a test reset part-way; one ended early still gets one.
       if (!abandoned) hooks.sessionEnded?.(sessionId);
       return { sessionId, result, counts };
     },

@@ -2,7 +2,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 import { CENTRE } from '../config';
 import { Director } from '../examiner/director';
-import { END_FAIL, END_PASS, routeDirections } from '../examiner/phrases';
+import { END_FAIL, END_PASS, END_UNFINISHED, routeDirections } from '../examiner/phrases';
 import { PullUp } from '../examiner/pullup';
 import { tellMeFault, type TellMeAnswer } from '../examiner/tell-me';
 import { TellMe } from '../examiner/tell-me-live';
@@ -195,17 +195,21 @@ function recordFault(f: Fault, place: string) {
   sync.addFault(event);
 }
 
-/** The drive is over (pulled up, or Enter): show the result from local faults, and save it behind the scenes. */
+/**
+ * The drive is over (pulled up, or Enter): show the result from local faults, and save it behind the scenes.
+ * Ending before the examiner has asked to pull up is a test not finished, never a pass.
+ */
 function endDrive() {
   if (!session || ended) return;
   ended = true;
   if (paused) setPaused(false);
   voice.stop();
+  const finished = director!.finished;
   const counts = countFaults(found.map((f) => f.fault));
-  const result = resultOf(counts);
+  const result = resultOf(counts, finished);
   resultScreen.show(result, counts, foundRows(), tellMeAnswer);
-  voice.say(result === 'PASS' ? END_PASS : END_FAIL);
-  sync.endSession(session.sessionId, new Date().toISOString());
+  voice.say(result === 'PASS' ? END_PASS : result === 'FAIL' ? END_FAIL : END_UNFINISHED);
+  sync.endSession(session.sessionId, new Date().toISOString(), finished ? 'finished' : 'unfinished');
   showSaveState();
 }
 
@@ -365,8 +369,8 @@ renderer.setAnimationLoop((now: number) => {
       hud.clearFaults();
       resultScreen.hide();
       stopDebrief();
-      // An unfinished test is saved as ended here, with the faults so far. A new one starts on the next frame.
-      if (session && !ended) sync.endSession(session.sessionId, new Date().toISOString(), true);
+      // A test reset part-way is saved as ended here (UNFINISHED), with the faults so far. A new one starts on the next frame.
+      if (session && !ended) sync.endSession(session.sessionId, new Date().toISOString(), 'abandoned');
       session = null;
       ended = false;
       faultCount = 0;

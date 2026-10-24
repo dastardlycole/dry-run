@@ -28,6 +28,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color:
 #result h1 { margin: 0 0 12px; font-size: 44px; letter-spacing: 0.04em; text-transform: uppercase; }
 #result h1.pass { color: #4ad66d; }
 #result h1.fail { color: #ff5a5a; }
+#result h1.unfinished { color: #b8c0c8; }
+#result .unfinished-note { margin: -4px 0 14px; font-size: 15px; opacity: 0.85; }
 :is(#result, #pause-card) .counts { display: flex; gap: 10px; margin-bottom: 16px; }
 :is(#result, #pause-card) .count { flex: 1; padding: 8px 12px; border-radius: 6px; background: #262c33; border-left: 5px solid; display: flex; align-items: baseline; gap: 8px; }
 :is(#result, #pause-card) .count b { font-size: 26px; }

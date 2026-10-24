@@ -98,7 +98,7 @@ const startSession = (a = app) =>
     payload: { sessionId: 'sess-1', learnerId: 'learner-1', centreId: 'wanstead', routeId: 'demo', startedAt: '2026-10-24T10:00:00.000Z' },
   });
 const saveFaults = (events: FaultEvent[], a = app) => a.inject({ method: 'POST', url: '/api/events', payload: { events } });
-const endSession = (a = app) => a.inject({ method: 'POST', url: '/api/sessions/sess-1/end', payload: { endedAt: '2026-10-24T10:10:00.000Z' } });
+const endSession = (a = app) => a.inject({ method: 'POST', url: '/api/sessions/sess-1/end', payload: { endedAt: '2026-10-24T10:10:00.000Z', finished: true } });
 const get = async (a = app, id = 'sess-1') => {
   const res = await a.inject({ method: 'GET', url: `/api/sessions/${id}/debrief` });
   const lines = res.statusCode === 200 ? res.payload.trim().split('\n').map((l) => JSON.parse(l) as DebriefLine) : [];

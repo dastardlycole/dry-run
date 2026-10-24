@@ -1,4 +1,4 @@
-import type { Counts, Result } from '../faults/result';
+import { wouldFail, type Counts, type Result } from '../faults/result';
 import type { Category } from '../faults/types';
 import type { TellMeAnswer } from '../examiner/tell-me';
 import type { Vec2 } from '../world/types';
@@ -30,7 +30,20 @@ export class ResultScreen {
   /** `tellMe`: how the 'tell me' question went, if it was asked (a wrong answer is also in `faults`). */
   show(result: Result, counts: Counts, faults: ResultFault[], tellMe: TellMeAnswer | null = null) {
     const card = el('div', 'card');
-    card.append(el('h1', result === 'PASS' ? 'pass' : 'fail', result === 'PASS' ? 'Pass' : 'Fail'));
+    const heading = { PASS: ['pass', 'Pass'], FAIL: ['fail', 'Fail'], UNFINISHED: ['unfinished', 'Test not finished'] } as const;
+    card.append(el('h1', ...heading[result]));
+    if (result === 'UNFINISHED') {
+      const worst = counts.dangerous ? 'a dangerous fault' : counts.serious ? 'a serious fault' : 'too many driving faults';
+      card.append(
+        el(
+          'p',
+          'unfinished-note',
+          wouldFail(counts)
+            ? `You'd already made ${worst}, so this would have been a fail.`
+            : 'You ended the test before the end of the route.',
+        ),
+      );
+    }
 
     const tally = el('div', 'counts');
     for (const c of ['driving', 'serious', 'dangerous'] as const) {
