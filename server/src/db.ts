@@ -14,11 +14,16 @@ export async function getDb(): Promise<Db> {
 
 export async function mongoStatus(): Promise<'up' | 'down' | 'not configured'> {
   if (!env.mongoUri) return 'not configured';
+  // Capped, so a slow or blocked Atlas never stalls /api/health (the deploy's health check).
+  let timer: NodeJS.Timeout | undefined;
+  const tooSlow = new Promise<'down'>((done) => (timer = setTimeout(() => done('down'), 2000)));
+  const ping = getDb()
+    .then((db) => db.command({ ping: 1 }))
+    .then(() => 'up' as const, () => 'down' as const);
   try {
-    await (await getDb()).command({ ping: 1 });
-    return 'up';
-  } catch {
-    return 'down';
+    return await Promise.race([ping, tooSlow]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

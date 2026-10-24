@@ -10,10 +10,15 @@
   "scripts": {
     "dev": "concurrently -n client,server -c cyan,magenta \"npm run dev -w client\" \"npm run dev -w server\"",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm test -w client -w server -w tools"
+    "test": "npm test -w client -w server -w tools",
+    "build": "npm run build -w client",
+    "start": "npm start -w server"
   },
   "devDependencies": {
     "concurrently": "^10.0.6",
     "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": "24.x"
   }
 }
