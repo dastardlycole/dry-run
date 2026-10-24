@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dashPieces, discTriangles, offsetPolyline, stripTriangles } from './geometry';
+import { dashPieces, discTriangles, offsetPolyline, stripTriangles, stripUVs } from './geometry';
 import type { Vec2 } from './types';
 
 const close = (a: Vec2[], b: Vec2[]) => a.forEach((p, i) => p.forEach((v, k) => expect(v).toBeCloseTo(b[i][k], 6)));
@@ -59,5 +59,15 @@ describe('dashPieces', () => {
 
   it('ignores zero-length segments', () => {
     expect(dashPieces([[0, 0], [5, 0], [5, 0], [10, 0]], 1, 0)).toEqual([[[0, 0], [5, 0], [10, 0]]]);
+  });
+});
+
+describe('stripUVs', () => {
+  it('matches stripTriangles vertex for vertex, in metres along and across', () => {
+    const pts: Vec2[] = [[0, 0], [10, 0], [10, 5]];
+    const uvs = stripUVs(pts, -2, 2);
+    expect(uvs).toHaveLength(stripTriangles(pts, -2, 2).length);
+    close(uvs.slice(0, 6), [[0, -2], [10, -2], [0, 2], [0, 2], [10, -2], [10, 2]]);
+    expect(uvs[11]).toEqual([15, 2]);
   });
 });

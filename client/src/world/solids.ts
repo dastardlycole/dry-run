@@ -1,5 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
+import { carModel } from './car-model';
 import type { Pose, WorldData } from './types';
 
 // Things the car can crash into (SPEC §4.2 FR-V5): buildings and parked cars. The roads are flat at
@@ -26,18 +27,10 @@ export function addBuildingColliders(world: RAPIER.World, data: WorldData): RAPI
 const PARKED = { length: 4.2, width: 1.8, height: 1.45 };
 const PAINT = [0x2b4c7e, 0xd9d9d9, 0x1d1d1d, 0x8a8f94, 0x6b1f1f, 0x2f5d3a];
 
-/** Parked cars: a simple body and cabin each, with a fixed box collider. */
+/** Parked cars: the same hatchback as the learner's in different paints, each with a fixed box collider. */
 export function addParkedCars(world: RAPIER.World, scene: THREE.Scene, cars: Pose[]): RAPIER.Collider[] {
-  const glass = new THREE.MeshLambertMaterial({ color: 0x2a3440 });
-  const bodyGeom = new THREE.BoxGeometry(PARKED.length, 0.8, PARKED.width);
-  const cabinGeom = new THREE.BoxGeometry(2.2, 0.6, PARKED.width - 0.15);
   return cars.map(({ pos: [x, z], heading }, i) => {
-    const mesh = new THREE.Group();
-    const body = new THREE.Mesh(bodyGeom, new THREE.MeshLambertMaterial({ color: PAINT[i % PAINT.length] }));
-    body.position.y = 0.65;
-    const cabin = new THREE.Mesh(cabinGeom, glass);
-    cabin.position.set(-0.3, 1.35, 0);
-    mesh.add(body, cabin);
+    const mesh = carModel(PAINT[i % PAINT.length], { wheels: true });
     mesh.position.set(x, 0, z);
     mesh.rotation.y = heading;
     scene.add(mesh);

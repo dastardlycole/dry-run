@@ -1,5 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
+import { carModel, wheelModel } from '../world/car-model';
 import { driveForces, msToMph, nextGear, steerAngle, type DriveInput, type Gear } from './controls';
 
 // Car frame: +X forward, +Y up, +Z right (Rapier's default vehicle axes).
@@ -15,11 +16,14 @@ const WHEELS = [
   { x: -1.3, z: 0.75, front: false },
 ];
 const SPAWN_HEIGHT = 1.0;
+/** How high the physics body's centre rides above the road when the car is at rest. */
+const RIDE_HEIGHT = 0.7;
+const PAINT = 0xb3141e;
 
 /** Where the driver's eyes are, in the car frame. */
-export const DRIVER_EYE = new THREE.Vector3(-0.15, 0.7, 0.37);
+export const DRIVER_EYE = new THREE.Vector3(-0.15, 0.5, 0.37);
 /** The interior mirror, in the car frame. */
-export const MIRROR_POS = new THREE.Vector3(0.45, 0.78, 0);
+export const MIRROR_POS = new THREE.Vector3(0.45, 0.6, 0);
 
 export class Car {
   readonly body: RAPIER.RigidBody;
@@ -64,40 +68,30 @@ export class Car {
     });
 
     this.buildMesh();
+    this.mesh.traverse((o) => (o.castShadow = true));
     scene.add(this.mesh);
   }
 
   private buildMesh() {
-    const paint = new THREE.MeshLambertMaterial({ color: 0xcc2222 });
-    const dark = new THREE.MeshLambertMaterial({ color: 0x222222 });
-    const glass = new THREE.MeshLambertMaterial({ color: 0x88aacc, transparent: true, opacity: 0.35 });
-
-    // Lower body (its top is the bonnet you see from the driver's seat).
-    const lower = new THREE.Mesh(new THREE.BoxGeometry(HALF.x * 2, 0.55, HALF.z * 2), paint);
-    lower.position.y = -0.075;
-    // Cabin. From inside, its faces are culled, so it doesn't block the first-person view.
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.66, HALF.z * 2 - 0.1), glass);
-    cabin.position.set(-0.4, 0.52, 0);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.05, HALF.z * 2 - 0.1), paint);
-    roof.position.set(-0.75, 0.9, 0);
+    // The body sits on the physics body's centre, which rides RIDE_HEIGHT above the road.
+    this.mesh.add(carModel(PAINT, { lift: -RIDE_HEIGHT }));
+    this.mesh.add(lPlate(2.13, 0), lPlate(-2.17, 0.1));
     // Dashboard and steering wheel for the first-person view. No mirror mesh: from the driver's seat it
     // was a big dark block on the windscreen, and M shows the rear view on screen anyway.
-    const dash = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, HALF.z * 2 - 0.15), dark);
-    dash.position.set(0.45, 0.26, 0);
-    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.025, 8, 24), dark);
-    wheel.position.set(0.2, 0.42, DRIVER_EYE.z);
+    const dark = new THREE.MeshStandardMaterial({ color: 0x1e1f22, roughness: 0.8 });
+    // The dash fills the space from the steering wheel to the bottom of the windscreen, so only the
+    // front of the bonnet shows over it, as from a real driver's seat.
+    const dash = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.16, HALF.z * 2 - 0.1), dark);
+    dash.position.set(0.5, 0.26, 0);
+    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.022, 8, 28), dark);
+    wheel.position.set(0.26, 0.24, DRIVER_EYE.z);
     wheel.rotation.y = Math.PI / 2;
-    wheel.rotation.x = 0.4;
-    this.mesh.add(lower, cabin, roof, dash, wheel);
+    wheel.rotation.x = 0.35;
+    this.mesh.add(dash, wheel);
 
-    const tyreGeom = new THREE.CylinderGeometry(WHEEL_RADIUS, WHEEL_RADIUS, 0.22, 16);
-    tyreGeom.rotateX(Math.PI / 2); // axle along Z
-    const hubGeom = new THREE.BoxGeometry(0.3, 0.3, 0.23); // so you can see it spin
-    const hubMat = new THREE.MeshLambertMaterial({ color: 0x999999 });
     for (let i = 0; i < WHEELS.length; i++) {
       const pivot = new THREE.Object3D();
-      const tyre = new THREE.Mesh(tyreGeom, dark);
-      tyre.add(new THREE.Mesh(hubGeom, hubMat));
+      const tyre = wheelModel();
       pivot.add(tyre);
       this.mesh.add(pivot);
       this.wheelMeshes.push({ pivot, tyre });
@@ -167,4 +161,23 @@ export class Car {
     this.steer = 0;
     this.speed = 0;
   }
+}
+
+/** A red L on a white square, as UK learners show front and back. `x` is along the car, `y` its height. */
+function lPlate(x: number, y: number): THREE.Mesh {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#f4f4f4';
+  g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#d0101a';
+  g.fillRect(18, 10, 10, 44);
+  g.fillRect(18, 44, 30, 10);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 }));
+  // Face outwards: forward at the front, backwards at the back.
+  plate.rotation.y = x > 0 ? Math.PI / 2 : -Math.PI / 2;
+  plate.position.set(x, y, 0.45);
+  return plate;
 }

@@ -25,6 +25,12 @@ export interface Road {
 export interface Building {
   heightM: number;
   footprint: Vec2[];
+  /** OSM building tag (house, terrace, apartments, retail…), for how it's drawn. */
+  kind?: string;
+  /** Floors above ground, when OSM says. */
+  levels?: number;
+  /** Tagged as a shop, café, pub and so on: drawn with a shop front. */
+  shop?: boolean;
 }
 
 export interface Junction {
@@ -132,4 +138,26 @@ export interface Route {
   lineM: number[];
   steps: RouteStep[];
   parkedCars: Pose[];
+}
+
+export type GreenKind = 'park' | 'grass' | 'pitch' | 'wood' | 'scrub' | 'water';
+
+export interface GreenArea {
+  kind: GreenKind;
+  /** Outline, clipped to the map. */
+  ring: Vec2[];
+}
+
+/** Scenery around the roads (assets/<centre>/scenery.json, from tools/src/scenery.ts): looks only, no logic. */
+export interface SceneryData {
+  generatedAt: string;
+  /** Single trees mapped in OSM. */
+  trees: Vec2[];
+  /** Lines of trees (avenues, hedgerows). */
+  treeRows: Vec2[][];
+  areas: GreenArea[];
+  /** Street lamps mapped in OSM. */
+  lamps: Vec2[];
+  /** Pedestrian crossings on the roads: zebras get stripes and beacons, signal crossings studs. */
+  crossings: { pos: Vec2; kind: 'zebra' | 'signals' }[];
 }

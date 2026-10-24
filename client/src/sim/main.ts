@@ -14,9 +14,14 @@ import { fetchSummaryAudio } from '../net/summary-audio';
 import { Sync } from '../net/sync';
 import { GuideArrows, LightHeads, loadRoute, routeLinesMesh } from '../world/furniture';
 import { buildSiteLights, signalSites, TrafficLights } from '../world/lights';
+import { headingOf, pointAlong } from '../world/geometry';
+import { Look } from '../world/look';
 import { RouteProgress } from '../world/progress';
+import { streetDetails } from '../world/street';
+import { greenAreas, loadScenery, placeTrees, Trees, TREE_SHAPES } from '../world/scenery';
 import { makeProjection } from '../world/projection';
 import { addBuildingColliders, addParkedCars } from '../world/solids';
+import { setAnisotropy } from '../world/textures';
 import { buildWorld, emptyWorld, groundHalfM, loadWorld } from '../world/world';
 import { Cameras } from './camera';
 import { Car } from './car';
@@ -40,12 +45,8 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x9cc7e8);
-scene.fog = new THREE.Fog(0x9cc7e8, 400, 1500);
-scene.add(new THREE.HemisphereLight(0xffffff, 0x445544, 1.2));
-const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-sun.position.set(50, 100, 30);
-scene.add(sun);
+const look = new Look(renderer, scene);
+setAnisotropy(renderer);
 
 const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
 world.timestep = PHYSICS_DT;
@@ -72,6 +73,15 @@ const [worldData, route] = await Promise.all([
   }),
 ]);
 const roadStart = buildWorld(worldData, scene);
+// Parks, water and trees are looks only: they come in the background and the drive never waits for them.
+let trees: Trees | null = null;
+loadScenery(CENTRE.id)
+  .then(async (scenery) => {
+    scene.add(greenAreas(scenery), streetDetails(worldData, scenery));
+    trees = await Trees.create(placeTrees(worldData, scenery, TREE_SHAPES), renderer);
+    scene.add(trees.group);
+  })
+  .catch((err) => console.warn('[scenery] not loaded, driving without it', err));
 /** What each solid thing is, by collider handle, for R11. */
 const solidKind = new Map<number, Contact>();
 const buildingCollider = addBuildingColliders(world, worldData);
@@ -366,6 +376,8 @@ renderer.setAnimationLoop((now: number) => {
 
   car.sync();
   car.mesh.updateMatrixWorld();
+  look.follow(car.mesh.position);
+  trees?.update(car.mesh.position);
   lightHeads.update(simTime);
   if (progress) {
     const pos: [number, number] = [car.mesh.position.x, car.mesh.position.z];
@@ -399,6 +411,7 @@ renderer.setAnimationLoop((now: number) => {
   }
   cameras.update({ lookLeft: input.lookLeft, lookRight: input.lookRight, mirror: input.mirror }, dt);
   hud.update({ speedMph: car.speedMph, gear: car.gear, indicator, camera: cameras.mode, paused }, now);
+  renderer.shadowMap.needsUpdate = true;
   cameras.render(renderer, scene);
 });
 
@@ -406,6 +419,15 @@ renderer.setAnimationLoop((now: number) => {
 if (import.meta.env.DEV) Object.assign(window, {
     sim: {
       car, input, world, cameras, renderer, scene, route, lights, progress, voice, time: () => simTime,
+      /** Puts the car `m` metres along the demo route, facing along it (for checking how places look). */
+      goto(m: number) {
+        if (!route) return;
+        const { p, dir } = pointAlong(route.line, m);
+        car.setStart(p[0], p[1], headingOf(dir[0], dir[1]));
+        car.reset();
+        // R still goes back to the test centre.
+        car.setStart(route.start.pos[0], route.start.pos[1], route.start.heading);
+      },
       /** Downloads the drive since the last reset as a Frame[] JSON, for use as a fault test trace. */
       saveTrace() {
         const a = document.createElement('a');

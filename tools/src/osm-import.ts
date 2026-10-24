@@ -26,6 +26,9 @@ interface OsmElement {
   tags?: Tags;
 }
 
+/** Amenities with a shop front (not churches, schools or toilets). */
+const SHOP_AMENITIES = new Set(['cafe', 'restaurant', 'pub', 'bar', 'fast_food', 'bank', 'pharmacy', 'post_office', 'dentist', 'veterinary', 'ice_cream', 'bureau_de_change']);
+
 /** Roads run a little past the building radius so the edge of the map isn't ragged. */
 const ROAD_EXTENT_M = CENTRE.radiusM + 100;
 
@@ -93,7 +96,14 @@ for (const w of ways) {
     const ids = w.nodes!;
     if (ids.length < 4 || !ids.every((id) => pos.has(id))) continue;
     const footprint = ids.slice(0, -1).map((id) => roundPt(pos.get(id)!)); // closed ring: drop the repeated last node
-    buildings.push({ heightM: buildingHeightM(tags), footprint });
+    const levels = parseFloat(tags['building:levels'] ?? '');
+    buildings.push({
+      heightM: buildingHeightM(tags),
+      footprint,
+      kind: tags.building,
+      ...(levels > 0 && { levels }),
+      ...((tags.shop || SHOP_AMENITIES.has(tags.amenity ?? '')) && { shop: true }),
+    });
   }
 }
 

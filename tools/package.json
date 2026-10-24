@@ -7,6 +7,7 @@
     "test": "vitest run",
     "osm-fetch": "tsx src/osm-fetch.ts",
     "osm-import": "tsx src/osm-import.ts",
+    "scenery": "tsx src/scenery.ts",
     "route-build": "tsx src/route-build.ts",
     "gen-tts": "tsx src/gen-tts.ts",
     "import-stats19": "tsx src/import-stats19.ts",

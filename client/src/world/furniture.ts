@@ -58,7 +58,7 @@ export class GuideArrows {
       this.arrowM.push(m);
     }
     this.mesh = flatMesh(tris, 0x2f7df6, LAYER.marking + 0.5);
-    const mat = this.mesh.material as THREE.MeshLambertMaterial;
+    const mat = this.mesh.material as THREE.Material;
     mat.transparent = true;
     mat.opacity = 0.8;
     this.show(0);

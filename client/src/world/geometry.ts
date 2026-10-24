@@ -49,6 +49,21 @@ export function stripTriangles(points: Vec2[], left: number, right: number): Vec
   return tris;
 }
 
+/**
+ * Texture coordinates in metres for stripTriangles(points, left, right), vertex for vertex: u runs along
+ * the road and v across it, so paving slabs and kerb stones follow the road round bends.
+ */
+export function stripUVs(points: Vec2[], left: number, right: number): Vec2[] {
+  const uvs: Vec2[] = [];
+  let s0 = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const s1 = s0 + Math.hypot(points[i + 1][0] - points[i][0], points[i + 1][1] - points[i][1]);
+    uvs.push([s0, left], [s1, left], [s0, right], [s0, right], [s1, left], [s1, right]);
+    s0 = s1;
+  }
+  return uvs;
+}
+
 /** Triangles for a filled circle. */
 export function discTriangles([cx, cz]: Vec2, radius: number, segments = 20): Vec2[] {
   const tris: Vec2[] = [];

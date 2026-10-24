@@ -30,7 +30,7 @@ Use the name in the first column for `/rename`. Tick off when committed. Times a
 | 7 | `debrief-rag` | Guidance ingest + autoEmbed index, Argon debrief, citation checker, debrief screen | ✅ done | Sat 17:00 |
 | 8 | `tts-demo-mode` | Spoken result (TTS pipeline already built in row 4: `npm run gen-tts -w tools`), demo seed data, `R` reset | ✅ done | Sat 18:00 |
 | — | **checkpoint** | Everything above working end to end? If not, fix only that | — | Sat 18:00 |
-| 8b | `photoreal-tiles` | Google Photorealistic 3D Tiles as the visible world (OSM stays as the invisible logic layer); car follows real ground height; OSM look as fallback. **First thing after the P0 checkpoint, ahead of all P1 work** | Drive the route and recognise the real streets | — |
+| 8b | `world-look` | Trailhead-style world built from open data: sky and shadows, textured roads with kerbs, brick buildings with roofs, windows and shop fronts, trees and parks (`npm run scenery -w tools`), lamps, walls, hedges, zebras, a hatchback with L plates. Google 3D Tiles were tried and dropped (blurry at street level) | ✅ done | — |
 | 9 | `hybrid-search` | Atlas Search + `$rankFusion` + `$rerank` instructor search | Test queries return sensible junctions | Sat 19:30 |
 | 10 | `saint-or-live` | Saint report + email (if we have a seat) **or** Gemini Live "tell me" question | Works once, start to finish | Sat 21:00 |
 | — | **freeze** | Bug fixes only, rehearse the drive 3 times | — | Sat 21:00 |

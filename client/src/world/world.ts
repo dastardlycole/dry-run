@@ -1,13 +1,19 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { dashPieces, discTriangles, stripTriangles, type Circle } from './geometry';
+import { dashPieces, discTriangles, offsetPolyline, stripTriangles, stripUVs, type Circle } from './geometry';
+import { areaOf, buildingsGroup, isShop } from './buildings';
+import { surface } from './textures';
 import type { Road, Vec2, WorldData } from './types';
 
 // Builds the 3D world from assets/<centre>/world.json (SPEC §4.1): grass, pavements, roads,
 // lane markings and buildings, each merged into one mesh.
 
-const PAVEMENT_M = 2;
+export const PAVEMENT_M = 2;
 const LINE_W = 0.12;
+/** Kerb stones along roads with a pavement: how high they stand and how wide their top is. */
+const KERB_H = 0.12;
+const KERB_W = 0.15;
+/** How far the paving reaches out from a shop's walls (it stops at the road, which draws on top). */
+const SHOP_APRON_M = 14;
 const NO_PAVEMENT = new Set(['service', 'motorway', 'motorway_link', 'trunk_link']);
 /** Roads narrower than this (single-track, service) get no painted lines. */
 const MIN_MARKED_WIDTH_M = 5;
@@ -21,7 +27,6 @@ export const COLOURS = {
   pavement: 0xa9a59c,
   road: 0x45474b,
   marking: 0xf2f2ee,
-  buildings: [0xc9b79c, 0xb5a48a, 0xd8cdb8, 0x9e7f6a, 0xbfb6aa, 0xa8604c],
 };
 
 /** Half the side of the square of grass (and of its collider), in metres. */
@@ -71,26 +76,54 @@ export function buildWorld(data: WorldData, scene: THREE.Scene): StartPose {
   for (const j of data.junctions) if (j.degree >= 3) junctionGrid.add(j.pos, (joins.get(key(j.pos))?.half ?? 4) + 1);
   const holesNear = (a: Vec2, b: Vec2) => junctionGrid.near(a, b);
 
+  // Kerbs stop where side roads come in: the gap covers the side road and its pavements.
+  const mouthGrid = new SpatialGrid(20);
+  for (const j of data.junctions) if (j.degree >= 3) mouthGrid.add(j.pos, (joins.get(key(j.pos))?.half ?? 4) + PAVEMENT_M + 1);
+
   const pavement: Vec2[] = [];
+  const pavementUV: Vec2[] = [];
   const road: Vec2[] = [];
   const marks: Vec2[] = [];
+  const kerbs: number[] = [];
   for (const r of data.roads) {
     const half = r.widthM / 2;
-    if (hasPavement(r)) pavement.push(...stripTriangles(r.points, -half - PAVEMENT_M, half + PAVEMENT_M));
+    if (hasPavement(r)) {
+      for (const side of [-1, 1]) {
+        const [a, b] = side < 0 ? [-half - PAVEMENT_M, -half] : [half, half + PAVEMENT_M];
+        pavement.push(...stripTriangles(r.points, a, b));
+        pavementUV.push(...stripUVs(r.points, a, b));
+      }
+      if (r.highway !== 'service') for (const piece of dashPieces(r.points, 1, 0, (a, b) => mouthGrid.near(a, b))) kerbs.push(...kerbPiece(piece, half));
+    }
     road.push(...stripTriangles(r.points, -half, half));
     if (r.widthM >= MIN_MARKED_WIDTH_M && r.highway !== 'service') marks.push(...markings(r, holesNear));
   }
+  // Shops on the high street stand on paving, not grass: a paved apron all round each one.
+  for (const b of data.buildings) {
+    if (!isShop(b) || b.footprint.length < 3) continue;
+    // Run one point past the start so the first corner is mitred like the others.
+    const ring = [...b.footprint, b.footprint[0], b.footprint[1]];
+    const tris = areaOf(b.footprint) > 0 ? stripTriangles(ring, -SHOP_APRON_M, 0) : stripTriangles(ring, 0, SHOP_APRON_M);
+    pavement.push(...tris);
+    pavementUV.push(...tris);
+  }
   for (const d of discs) {
-    if (d.pavement) pavement.push(...discTriangles(d.p, d.half + PAVEMENT_M));
+    if (d.pavement) {
+      const tris = discTriangles(d.p, d.half + PAVEMENT_M);
+      pavement.push(...tris);
+      pavementUV.push(...tris);
+    }
     road.push(...discTriangles(d.p, d.half));
   }
 
-  group.add(flatMesh(groundTriangles(groundHalfM(data.centre.radiusM)), COLOURS.grass, LAYER.ground));
-  group.add(flatMesh(pavement, COLOURS.pavement, LAYER.pavement));
-  group.add(flatMesh(road, COLOURS.road, LAYER.road));
+  const flat = (name: string, sizeM: number, fallback: number, tint?: number) =>
+    surface(name, sizeM, { fallback, tint, params: { depthWrite: false } });
+  group.add(flatMesh(groundTriangles(groundHalfM(data.centre.radiusM)), flat('leafy_grass', 4, COLOURS.grass, 0xb8c8a0), LAYER.ground));
+  group.add(flatMesh(pavement, flat('concrete_pavement', 2.4, COLOURS.pavement, 0xd8d4cc), LAYER.pavement, pavementUV));
+  group.add(flatMesh(road, flat('asphalt_02', 6, COLOURS.road, 0x9a9a9a), LAYER.road));
   group.add(flatMesh(marks, COLOURS.marking, LAYER.marking));
-  const buildings = buildingsMesh(data);
-  if (buildings) group.add(buildings);
+  group.add(kerbMesh(kerbs));
+  group.add(buildingsGroup(data.buildings));
 
   return startPose(data.roads);
 }
@@ -119,6 +152,32 @@ function markings(r: Road, holesNear: (a: Vec2, b: Vec2) => Circle[]): Vec2[] {
   return tris;
 }
 
+/** Both kerbs of one stretch of road: a top and a face on each side, as flat x,y,z triangles. */
+function kerbPiece(points: Vec2[], half: number): number[] {
+  const out: number[] = [];
+  for (const side of [-1, 1]) {
+    const inner = side * half;
+    const outer = side * (half + KERB_W);
+    for (const [x, z] of stripTriangles(points, inner, outer)) out.push(x, KERB_H, z);
+    // The face towards the road: the inner edge of the top, dropped to the ground.
+    const edge = offsetPolyline(points, inner);
+    for (let i = 0; i < edge.length - 1; i++) {
+      const [a, b] = [edge[i], edge[i + 1]];
+      out.push(a[0], 0, a[1], b[0], 0, b[1], a[0], KERB_H, a[1], a[0], KERB_H, a[1], b[0], 0, b[1], b[0], KERB_H, b[1]);
+    }
+  }
+  return out;
+}
+
+function kerbMesh(kerbs: number[]): THREE.Mesh {
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(kerbs, 3));
+  geom.computeVertexNormals();
+  const mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({ color: 0xbdb8ae, roughness: 0.95, side: THREE.DoubleSide }));
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
 function groundTriangles(size: number): Vec2[] {
   return [
     [-size, -size],
@@ -130,50 +189,36 @@ function groundTriangles(size: number): Vec2[] {
   ];
 }
 
-export function flatMesh(tris: Vec2[], colour: number, renderOrder: number): THREE.Mesh {
+/**
+ * One flat layer on the ground. `look` is a plain colour or a material; `uvs` (in metres, one per vertex
+ * of `tris`) default to the world position, which suits textures with no direction like asphalt.
+ */
+export function flatMesh(tris: Vec2[], look: number | THREE.Material, renderOrder: number, uvs: Vec2[] = tris): THREE.Mesh {
   const pos = new Float32Array(tris.length * 3);
   const normal = new Float32Array(tris.length * 3);
+  const uv = new Float32Array(tris.length * 2);
   for (let t = 0; t < tris.length; t += 3) {
     const [a, b, c] = [tris[t], tris[t + 1], tris[t + 2]];
     // Wind every triangle to face up (+y), whichever way the shape helpers emitted it, so lighting is even.
     const upward = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) < 0;
-    (upward ? [a, b, c] : [a, c, b]).forEach(([x, z], k) => {
+    (upward ? [0, 1, 2] : [0, 2, 1]).forEach((from, k) => {
       const i = t + k;
-      pos[i * 3] = x;
-      pos[i * 3 + 2] = z;
+      pos[i * 3] = tris[t + from][0];
+      pos[i * 3 + 2] = tris[t + from][1];
       normal[i * 3 + 1] = 1;
+      uv[i * 2] = uvs[t + from][0];
+      uv[i * 2 + 1] = uvs[t + from][1];
     });
   }
   const geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geom.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
-  const mat = new THREE.MeshLambertMaterial({ color: colour, depthWrite: false });
+  geom.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  const mat = typeof look === 'number' ? new THREE.MeshStandardMaterial({ color: look, roughness: 0.7, depthWrite: false }) : look;
   const mesh = new THREE.Mesh(geom, mat);
   mesh.renderOrder = renderOrder;
+  mesh.receiveShadow = true;
   return mesh;
-}
-
-function buildingsMesh(data: WorldData): THREE.Mesh | null {
-  const parts: THREE.BufferGeometry[] = [];
-  const colour = new THREE.Color();
-  data.buildings.forEach((b, i) => {
-    // Shape is in the XY plane; after rotating -90° about X, shape y becomes world -z and depth becomes height.
-    const shape = new THREE.Shape(b.footprint.map(([x, z]) => new THREE.Vector2(x, -z)));
-    const geom = new THREE.ExtrudeGeometry(shape, { depth: b.heightM, bevelEnabled: false });
-    geom.rotateX(-Math.PI / 2);
-    colour.setHex(COLOURS.buildings[i % COLOURS.buildings.length]);
-    const n = geom.getAttribute('position').count;
-    const colours = new Float32Array(n * 3);
-    for (let v = 0; v < n; v++) colour.toArray(colours, v * 3);
-    geom.setAttribute('color', new THREE.BufferAttribute(colours, 3));
-    geom.deleteAttribute('uv');
-    parts.push(geom);
-  });
-  if (parts.length === 0) return null;
-  const merged = mergeGeometries(parts);
-  parts.forEach((g) => g.dispose());
-  if (!merged) return null;
-  return new THREE.Mesh(merged, new THREE.MeshLambertMaterial({ vertexColors: true }));
 }
 
 /** On the nearest main road to the centre (the test centre), facing along it. */

@@ -30,4 +30,5 @@ npm run dev
 
 - Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL).
 - Road safety data (STATS19), Department for Transport, Open Government Licence.
+- Textures and sky from [Poly Haven](https://polyhaven.com) (CC0). Trees generated with [EZ-Tree](https://github.com/dgreenheck/ez-tree) (MIT).
 - DVSA and Highway Code guidance (gov.uk), Open Government Licence v3.
