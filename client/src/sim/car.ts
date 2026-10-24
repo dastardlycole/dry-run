@@ -1,19 +1,23 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
+import type { CarAsset } from '../world/car-asset';
 import { carModel, wheelModel } from '../world/car-model';
 import { driveForces, msToMph, nextGear, steerAngle, type DriveInput, type Gear } from './controls';
 
 // Car frame: +X forward, +Y up, +Z right (Rapier's default vehicle axes).
 // UK car, so the driver sits on the right (+Z).
-const HALF = { x: 2.0, y: 0.3, z: 0.875 }; // ~4.0 m × 1.75 m, like a Fiesta
+const HALF = { x: 2.22, y: 0.3, z: 0.875 }; // ~4.45 m × 1.75 m, the size of the car model
 const MASS = 1150;
 const WHEEL_RADIUS = 0.3;
 const SUSPENSION_REST = 0.35;
+/** Distance between the axles; the car model is scaled to match it. */
+export const WHEELBASE_M = 2.6;
+const AXLE_X = WHEELBASE_M / 2;
 const WHEELS = [
-  { x: 1.3, z: -0.75, front: true },
-  { x: 1.3, z: 0.75, front: true },
-  { x: -1.3, z: -0.75, front: false },
-  { x: -1.3, z: 0.75, front: false },
+  { x: AXLE_X, z: -0.75, front: true },
+  { x: AXLE_X, z: 0.75, front: true },
+  { x: -AXLE_X, z: -0.75, front: false },
+  { x: -AXLE_X, z: 0.75, front: false },
 ];
 const SPAWN_HEIGHT = 1.0;
 /** How high the physics body's centre rides above the road when the car is at rest. */
@@ -36,6 +40,13 @@ export class Car {
   private prevInput: DriveInput = { throttle: false, brake: false, left: false, right: false, handbrake: false };
   private vehicle: RAPIER.DynamicRayCastVehicleController;
   private wheelMeshes: { pivot: THREE.Object3D; tyre: THREE.Object3D }[] = [];
+  /** Where the driver's eyes are, in the car frame; moves to the model's seat once the model is in. */
+  readonly eye = DRIVER_EYE.clone();
+  /** The interior mirror, in the car frame; moves to the model's mirror once the model is in. */
+  readonly mirror = MIRROR_POS.clone();
+  /** The body built in code, shown until (or unless) the car model loads. */
+  private builtIn = new THREE.Group();
+  private plates: THREE.Mesh[] = [];
   private start = { x: 0, z: 0, heading: 0 };
 
   constructor(private world: RAPIER.World, scene: THREE.Scene) {
@@ -74,8 +85,9 @@ export class Car {
 
   private buildMesh() {
     // The body sits on the physics body's centre, which rides RIDE_HEIGHT above the road.
-    this.mesh.add(carModel(PAINT, { lift: -RIDE_HEIGHT }));
-    this.mesh.add(lPlate(2.13, 0), lPlate(-2.17, 0.1));
+    this.builtIn.add(carModel(PAINT, { lift: -RIDE_HEIGHT }));
+    this.plates = [lPlate(2.13, 0), lPlate(-2.17, 0.1)];
+    this.mesh.add(this.builtIn, ...this.plates);
     // Dashboard and steering wheel for the first-person view. No mirror mesh: from the driver's seat it
     // was a big dark block on the windscreen, and M shows the rear view on screen anyway.
     const dark = new THREE.MeshStandardMaterial({ color: 0x1e1f22, roughness: 0.8 });
@@ -87,7 +99,7 @@ export class Car {
     wheel.position.set(0.26, 0.24, DRIVER_EYE.z);
     wheel.rotation.y = Math.PI / 2;
     wheel.rotation.x = 0.35;
-    this.mesh.add(dash, wheel);
+    this.builtIn.add(dash, wheel);
 
     for (let i = 0; i < WHEELS.length; i++) {
       const pivot = new THREE.Object3D();
@@ -96,6 +108,24 @@ export class Car {
       this.mesh.add(pivot);
       this.wheelMeshes.push({ pivot, tyre });
     }
+  }
+
+  /** Swap the built-in body for the loaded model. It can arrive mid-drive: nothing else changes. */
+  useModel(model: CarAsset) {
+    this.mesh.remove(this.builtIn);
+    model.body.position.y = -RIDE_HEIGHT;
+    this.mesh.add(model.body);
+    this.wheelMeshes.forEach((w, i) => {
+      w.pivot.remove(w.tyre);
+      w.tyre = model.wheels[i];
+      w.pivot.add(w.tyre);
+    });
+    this.eye.copy(model.eye).setY(model.eye.y - RIDE_HEIGHT);
+    if (model.mirror) this.mirror.copy(model.mirror).setY(model.mirror.y - RIDE_HEIGHT);
+    // L plates on the bumpers, front and back.
+    const [front, back] = this.plates;
+    front.position.set(model.size.x / 2 + 0.02, 0.55 - RIDE_HEIGHT, 0.45);
+    back.position.set(-model.size.x / 2 - 0.02, 0.85 - RIDE_HEIGHT, 0.45);
   }
 
   get speedMph() {

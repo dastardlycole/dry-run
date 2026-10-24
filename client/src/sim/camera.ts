@@ -1,16 +1,10 @@
 import * as THREE from 'three';
-import { DRIVER_EYE, MIRROR_POS, type Car } from './car';
+import type { Car } from './car';
 
 export type CameraMode = 'driver' | 'chase';
 
 const LOOK_YAW = THREE.MathUtils.degToRad(75); // Q/E head turn
 const HEAD_RATE = 8; // how fast the head turns (higher = snappier)
-// Head turn needed to look from the driver's eyes at the interior mirror (up and to the left).
-const MIRROR_YAW = Math.atan2(DRIVER_EYE.z - MIRROR_POS.z, MIRROR_POS.x - DRIVER_EYE.x);
-const MIRROR_PITCH = Math.atan2(
-  MIRROR_POS.y - DRIVER_EYE.y,
-  Math.hypot(MIRROR_POS.x - DRIVER_EYE.x, MIRROR_POS.z - DRIVER_EYE.z),
-);
 
 // Three.js cameras look down -Z; the car faces +X. Turning by -90° lines them up.
 const FACE_FORWARD = -Math.PI / 2;
@@ -77,8 +71,11 @@ export class Cameras {
     let targetYaw = 0;
     let targetPitch = 0;
     if (head.mirror) {
-      targetYaw = MIRROR_YAW;
-      targetPitch = MIRROR_PITCH;
+      // Head turn from the driver's eyes to the interior mirror (up and to the left). Both move when the
+      // car model loads, so work it out each time.
+      const { eye, mirror } = this.car;
+      targetYaw = Math.atan2(eye.z - mirror.z, mirror.x - eye.x);
+      targetPitch = Math.atan2(mirror.y - eye.y, Math.hypot(mirror.x - eye.x, mirror.z - eye.z));
     } else if (head.lookLeft !== head.lookRight) {
       targetYaw = head.lookLeft ? LOOK_YAW : -LOOK_YAW;
     }
@@ -89,7 +86,7 @@ export class Cameras {
 
     const carMesh = this.car.mesh;
     if (this.mode === 'driver') {
-      this.main.position.copy(DRIVER_EYE).applyMatrix4(carMesh.matrixWorld);
+      this.main.position.copy(this.car.eye).applyMatrix4(carMesh.matrixWorld);
       this.euler.set(this.pitch, FACE_FORWARD + this.yaw, 0);
       this.main.quaternion.copy(carMesh.quaternion).multiply(this.headQuat.setFromEuler(this.euler));
     } else {
@@ -104,7 +101,7 @@ export class Cameras {
     }
 
     // Rear-view camera at the interior mirror, looking backwards.
-    this.rear.position.copy(MIRROR_POS).applyMatrix4(carMesh.matrixWorld);
+    this.rear.position.copy(this.car.mirror).applyMatrix4(carMesh.matrixWorld);
     this.euler.set(0, -FACE_FORWARD, 0);
     this.rear.quaternion.copy(carMesh.quaternion).multiply(this.headQuat.setFromEuler(this.euler));
   }

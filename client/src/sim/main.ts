@@ -24,7 +24,8 @@ import { addBuildingColliders, addParkedCars } from '../world/solids';
 import { setAnisotropy } from '../world/textures';
 import { buildWorld, emptyWorld, groundHalfM, loadWorld } from '../world/world';
 import { Cameras } from './camera';
-import { Car } from './car';
+import { Car, WHEELBASE_M } from './car';
+import { loadCarAsset } from '../world/car-asset';
 import { Contacts } from './contacts';
 import { MPH_PER_MS, toggleIndicator, type Indicator } from './controls';
 import { Hud } from './hud';
@@ -106,6 +107,10 @@ const car = new Car(world, scene);
 if (route) car.setStart(route.start.pos[0], route.start.pos[1], route.start.heading);
 else car.setStart(roadStart.x, roadStart.z, roadStart.heading);
 car.reset();
+// The car model (with its interior) comes in the background; until then the car is the one built in code.
+loadCarAsset('/models/corolla.glb', WHEELBASE_M)
+  .then((model) => car.useModel(model))
+  .catch((err) => console.warn('[car] model not loaded, keeping the built-in car', err));
 /** Seconds of driving so far (stops while paused); the traffic lights run on this. */
 let simTime = 0;
 const cameras = new Cameras(car);
