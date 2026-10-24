@@ -134,6 +134,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color:
 #centre .modes button { padding: 7px 16px; border: 0; background: #0f1215; color: inherit; }
 #centre .modes button[aria-checked='true'] { background: #2f7de1; color: #fff; font-weight: 600; }
 #result h1.practice { color: #8bb8ff; }
+#centre .weak { margin: 4px 0 16px; padding: 10px 12px; border: 1px solid #5a4a1e; border-radius: 6px; background: #221e14; }
+#centre .weak h3 { margin: 0 0 6px; font-size: 15px; color: #ffd24a; }
+#centre .weak .weak-note { margin: 0; font-size: 14px; }
+#centre .weak .weak-note:empty { display: none; }
+#centre .weak ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+#centre .weak li { display: flex; align-items: center; gap: 12px; }
+#centre .weak li div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+#centre .weak li span { font-size: 13px; opacity: 0.8; }
+#centre .weak .practise { width: auto; padding: 6px 12px; border: 1px solid #ffd24a; border-radius: 6px; background: none; color: #ffd24a; font-weight: 600; }
 #centre .bar { height: 8px; margin-bottom: 10px; border-radius: 4px; background: #0f1215; overflow: hidden; }
 #centre .bar > div { height: 100%; width: 0; background: #2f7de1; transition: width 0.6s ease; }
 /* The 'tell me' offer waits until the start card is closed. */

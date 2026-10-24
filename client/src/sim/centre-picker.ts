@@ -3,9 +3,12 @@
 // minute), and the page reloads on that centre. Wanstead drives behind the card meanwhile, so nothing waits.
 // Below that, the routes at the centre on screen (row 15, mock test): pick one, or "Surprise me" for a random one.
 // A switch above them picks a mock test or a practice drive (row 17), where an instructor gives a tip at each
-// fault; "Free drive" is practice with no route.
+// fault; "Free drive" is practice with no route. Under the centre's name, "Your weak junctions" (row 18): where
+// this learner's own past drives here kept going wrong, each with a Practise button that starts a practice
+// drive just before that junction.
 
 import { loadRoute } from '../world/furniture';
+import type { WeakJunction } from '../faults/weak';
 import { routeSummary } from '../world/route-summary';
 
 interface Progress {
@@ -60,6 +63,8 @@ export interface Here {
   picked: boolean;
   /** The drive behind the card now. */
   mode: Mode;
+  /** This browser's learner, whose past drives make the weak junctions. */
+  learnerId: string;
 }
 
 export class CentrePicker {
@@ -89,6 +94,11 @@ export class CentrePicker {
     const routes = `
       <section class="routes">
         <h${here.picked ? 1 : 2} class="centre-name"></h${here.picked ? 1 : 2}>
+        <div class="weak">
+          <h3>Your weak junctions</h3>
+          <p class="weak-note">Looking at your past drives…</p>
+          <ol></ol>
+        </div>
         <div class="modes" role="radiogroup" aria-label="Kind of drive">
           <button type="button" role="radio" data-mode="test">Mock test</button>
           <button type="button" role="radio" data-mode="practice">Practise</button>
@@ -127,6 +137,7 @@ export class CentrePicker {
     // No route list (the server didn't answer): no routes part, the drive behind the card still works.
     (this.el.querySelector('.routes') as HTMLElement).hidden = !here.routeIds.length;
     this.listRoutes(this.el.querySelector('ul')!);
+    this.showWeak();
     this.named(here.name);
     // Typing here isn't driving: keep the keys from the game (driving, T for 'tell me', starting the test).
     for (const type of ['keydown', 'keyup', 'pointerdown'] as const) this.el.addEventListener(type, (e) => e.stopPropagation());
@@ -190,6 +201,38 @@ export class CentrePicker {
           button.disabled = true;
           button.querySelector('span')!.textContent = 'not available';
         });
+    }
+  }
+
+  /** Fetched in the background: the card works the same without it (an empty box says why). */
+  private async showWeak() {
+    const box = this.el.querySelector<HTMLDivElement>('.weak')!;
+    const note = box.querySelector('.weak-note')!;
+    try {
+      const url = `/api/learners/${encodeURIComponent(this.here.learnerId)}/weak-junctions?centre=${encodeURIComponent(this.here.id)}`;
+      // Long enough for the server's first Atlas connection after a deploy.
+      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { drives, junctions } = (await res.json()) as { drives: number; junctions: WeakJunction[] };
+      note.textContent = junctions.length
+        ? ''
+        : drives
+          ? 'Nothing has gone wrong at the same junction twice yet. Keep driving here and this fills in.'
+          : 'Drive a route and your weak junctions show up here.';
+      const list = box.querySelector('ol')!;
+      for (const w of junctions) {
+        const li = document.createElement('li');
+        li.innerHTML = `<div><b></b><span></span></div><button type="button" class="practise">Practise</button>`;
+        li.querySelector('b')!.textContent = w.name;
+        li.querySelector('span')!.textContent = `${w.what}, ${w.times} of ${w.drives} times`;
+        li.querySelector('button')!.addEventListener('click', () => {
+          location.search = `?centre=${encodeURIComponent(this.here.id)}&route=${encodeURIComponent(w.routeId)}&mode=practice&at=${encodeURIComponent(w.junctionId)}`;
+        });
+        list.append(li);
+      }
+    } catch (err) {
+      console.warn('[weak] past drives not available', err);
+      note.textContent = "Your past drives can't be loaded just now.";
     }
   }
 

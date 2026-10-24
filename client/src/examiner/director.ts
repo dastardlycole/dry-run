@@ -57,7 +57,8 @@ export class Director {
       this.openingSaid = true;
       out.push(OPENING);
       const first = this.directions[0];
-      if (first && first.atM - m <= START_DIRECTION_M) {
+      // Not when the drive starts further along, past it (practice at a weak junction).
+      if (first && first.atM >= m && first.atM - m <= START_DIRECTION_M) {
         out.push(first.text);
         this.said.add(0);
       }

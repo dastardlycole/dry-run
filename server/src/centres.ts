@@ -1,6 +1,7 @@
 import { createReadStream, existsSync, readdirSync, readFileSync, type ReadStream } from 'node:fs';
 import { resolve } from 'node:path';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
+import type { Route } from '../../client/src/world/types';
 import type { CentreInfo } from '../../tools/src/centre/finder';
 
 // Any test centre (SPEC §16, row 22). POST /api/centres/find turns what the learner typed into a DVSA centre
@@ -89,24 +90,39 @@ export class Centres {
 
   find = (text: string) => this.deps.find(text);
 
+  /** The parts of route files the server uses, by centre and route: they never change once built. */
+  private routes = new Map<string, Pick<Route, 'lengthM' | 'steps'>>();
+
+  /** A route's length and steps from its file (shipped or built), or undefined for a route it doesn't have. */
+  route(id: string, routeId: string): Pick<Route, 'lengthM' | 'steps'> | undefined {
+    if (!ID.test(id) || !FILE.test(`route-${routeId}.json`)) return undefined;
+    const key = `${id}/${routeId}`;
+    if (!this.routes.has(key)) {
+      let route: Pick<Route, 'lengthM' | 'steps'> | null = null;
+      for (const dir of [this.deps.assetsDir, this.deps.cacheDir]) {
+        const path = resolve(dir, id, `route-${routeId}.json`);
+        if (!existsSync(path)) continue;
+        try {
+          const { lengthM, steps } = JSON.parse(readFileSync(path, 'utf8')) as Route;
+          route = { lengthM, steps: Array.isArray(steps) ? steps : [] };
+        } catch (err) {
+          this.log.warn(err, `route-${routeId}.json of ${id} could not be read`);
+        }
+        break;
+      }
+      // A route still being built isn't remembered as missing.
+      if (route) this.routes.set(key, route);
+    }
+    return this.routes.get(key);
+  }
+
   /**
-   * How long a route is, from its own file (shipped or built), so the server sets the test's pass mark
-   * itself rather than taking the client's word. Undefined for a route it doesn't have.
+   * How long a route is, from its own file, so the server sets the test's pass mark itself rather than
+   * taking the client's word. Undefined for a route it doesn't have.
    */
   routeLengthM(id: string, routeId: string): number | undefined {
-    if (!ID.test(id) || !FILE.test(`route-${routeId}.json`)) return undefined;
-    for (const dir of [this.deps.assetsDir, this.deps.cacheDir]) {
-      const path = resolve(dir, id, `route-${routeId}.json`);
-      if (!existsSync(path)) continue;
-      try {
-        const lengthM = JSON.parse(readFileSync(path, 'utf8')).lengthM;
-        return typeof lengthM === 'number' && lengthM > 0 ? lengthM : undefined;
-      } catch (err) {
-        this.log.warn(err, `route-${routeId}.json of ${id} could not be read`);
-        return undefined;
-      }
-    }
-    return undefined;
+    const lengthM = this.route(id, routeId)?.lengthM;
+    return typeof lengthM === 'number' && lengthM > 0 ? lengthM : undefined;
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { REPEAT_BACK_M, repeatFromM } from './repeat';
+import { REPEAT_BACK_M, repeatFromM, startBeforeM } from './repeat';
 
 const steps = [
   { action: 'left' as const, atM: 300 },
@@ -21,5 +21,21 @@ describe('repeatFromM', () => {
 
   it("doesn't count the end of the route as a junction", () => {
     expect(repeatFromM(steps, 1300)).toBe(680 - REPEAT_BACK_M);
+  });
+});
+
+describe('startBeforeM', () => {
+  const at = [
+    { junctionId: 'a', action: 'left' as const, atM: 300 },
+    { junctionId: 'b', action: 'roundabout' as const, atM: 700, line: { atM: 680 } },
+    { junctionId: 'c', action: 'end' as const, atM: 1200 },
+  ];
+  it('starts before the junction (its give-way line, if it has one)', () => {
+    expect(startBeforeM(at, 'a')).toBe(300 - REPEAT_BACK_M);
+    expect(startBeforeM(at, 'b')).toBe(680 - REPEAT_BACK_M);
+  });
+  it('is null for a junction not on the route, or the end', () => {
+    expect(startBeforeM(at, 'x')).toBeNull();
+    expect(startBeforeM(at, 'c')).toBeNull();
   });
 });

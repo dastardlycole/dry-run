@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { MongoBulkWriteError, type Db } from 'mongodb';
 import { countFaults, drivingFaultLimit, resultOf, type Result } from '../../client/src/faults/result';
 import type { FaultEvent } from '../../client/src/faults/types';
+import { weakJunctions, type FaultGroup } from '../../client/src/faults/weak';
+import type { RouteStep } from '../../client/src/world/types';
 
 // Sessions and fault events (SPEC §7, §9 API). The client makes the session id itself, so a drive that
 // started while the server was down can be saved later under the same id: every call here is safe to
@@ -97,6 +99,8 @@ export async function ensureIndexes(db: Db) {
     { key: { centreId: 1, junctionId: 1, ruleId: 1 } },
     { key: { sessionId: 1, ts: 1 } },
   ]);
+  // A learner's latest drives at a centre (weak junctions).
+  await db.collection('sessions').createIndex({ learnerId: 1, centreId: 1, startedAt: -1 });
 }
 
 /** Told when faults are saved and when a test ends, so the debrief can be written in the background. */
@@ -105,7 +109,12 @@ export interface SessionHooks {
   sessionEnded?: (sessionId: string) => void;
   /** The route's length from its file, which sets the driving fault limit. Without it, the real 15. */
   routeLengthM?: (centreId: string, routeId: string) => number | undefined;
+  /** A route's steps from its file, for which junctions a past drive went through. */
+  routeSteps?: (centreId: string, routeId: string) => RouteStep[] | undefined;
 }
+
+/** How many of the learner's latest drives "your weak junctions" looks at. */
+export const WEAK_DRIVES = 50;
 
 export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>, hooks: SessionHooks = {}) {
   const sessions = async () => (await getDb()).collection<SessionDoc>('sessions');
@@ -190,6 +199,52 @@ export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>, ho
       // No examiner's summary for a test reset part-way; one ended early still gets one.
       if (!abandoned) hooks.sessionEnded?.(sessionId);
       return { sessionId, result, counts, maxDrivingFaults };
+    },
+  );
+
+  // "Your weak junctions" (row 18): the learner's last drives on a route at this centre, and their faults
+  // there grouped by junction and rule in Atlas. A drive reset part-way, or one still going, isn't counted.
+  app.get<{ Params: { id: string }; Querystring: { centre: string } }>(
+    '/api/learners/:id/weak-junctions',
+    {
+      schema: {
+        params: { type: 'object', properties: { id } },
+        querystring: { type: 'object', required: ['centre'], properties: { centre: id } },
+      },
+    },
+    async (req) => {
+      const learnerId = req.params.id;
+      const centreId = req.query.centre;
+      const drives = await (await sessions())
+        .find(
+          { learnerId, centreId, endedAt: { $exists: true }, abandoned: { $ne: true }, mode: { $ne: 'free' }, routeId: { $ne: 'free' } },
+          { projection: { routeId: 1 }, sort: { startedAt: -1 }, limit: WEAK_DRIVES },
+        )
+        .toArray();
+      const groups = await (await events())
+        .aggregate<{ _id: Pick<FaultGroup, 'junctionId' | 'ruleId'>; sessionIds: string[]; missed: unknown[] }>([
+          { $match: { learnerId, centreId, sessionId: { $in: drives.map((d) => d._id) } } },
+          {
+            $group: {
+              _id: { junctionId: '$junctionId', ruleId: '$ruleId' },
+              sessionIds: { $addToSet: '$sessionId' },
+              // R7: which way the learner didn't look, each time (a look left missed once and a look right
+              // once is still the same fault at the same junction).
+              missed: { $push: '$context.missed' },
+            },
+          },
+        ])
+        .toArray();
+      const junctions = weakJunctions(
+        groups.map((g) => ({
+          ...g._id,
+          sessionIds: g.sessionIds,
+          missed: [...new Set(g.missed.flatMap((m) => (Array.isArray(m) ? m.map(String) : [])))],
+        })),
+        drives.map((d) => ({ sessionId: d._id, routeId: d.routeId })),
+        (routeId) => hooks.routeSteps?.(centreId, routeId),
+      );
+      return { drives: drives.length, junctions };
     },
   );
 }

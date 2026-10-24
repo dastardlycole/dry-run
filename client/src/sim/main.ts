@@ -38,7 +38,7 @@ import { Input } from './input';
 import { areaOf, placeOf, roadAt } from './place';
 import type { DebriefView } from './fault-list';
 import { PauseScreen } from './pause-screen';
-import { repeatFromM } from './repeat';
+import { repeatFromM, startBeforeM } from './repeat';
 import { ResultScreen, type ResultFault } from './result-screen';
 
 // The drivable car in the OSM world around the test centre (SPEC §4.1, §4.2).
@@ -76,6 +76,17 @@ document.getElementById('help-repeat')!.hidden = mode !== 'practice';
 const badge = document.getElementById('mode-badge')!;
 badge.className = mode;
 badge.textContent = { test: 'Mock test', practice: 'Practice', free: 'Free drive' }[mode];
+/** One per browser, kept between visits. There are no accounts. */
+const learnerId = (() => {
+  const KEY = 'dryrun.learnerId';
+  try {
+    const id = localStorage.getItem(KEY) ?? `learner-${crypto.randomUUID()}`;
+    localStorage.setItem(KEY, id);
+    return id;
+  } catch {
+    return `learner-${crypto.randomUUID()}`;
+  }
+})();
 // If the map can't load, keep going on plain grass so the car still drives.
 let mapNote = '';
 // Until a route is chosen, the start card asks where the learner's test is and which route to drive; the
@@ -89,6 +100,7 @@ const picker = new CentrePicker({
   routeId,
   picked: params.has('centre'),
   mode,
+  learnerId,
 });
 if (!params.has('route') && mode !== 'free') picker.show();
 picker.onHide = () => input.clear();
@@ -178,6 +190,12 @@ let paused = false;
 const voice = new Voice();
 voice.onSpeak = (text) => hud.showCaption(text);
 const director = route ? new Director(routeDirections(route)) : null;
+// From a weak junction's Practise button (?at=): start just before that junction, where J would put the car.
+const startAtM = mode === 'practice' && route ? startBeforeM(route.steps, params.get('at') ?? '') : null;
+if (startAtM !== null) {
+  placeAlongRoute(startAtM);
+  progress!.jumpTo(startAtM);
+}
 const edgeById = new Map(worldData.graph.edges.map((e) => [e.id, e]));
 const routeEdges = route ? route.edges.flatMap((id) => edgeById.get(id) ?? []) : [];
 const roadByWay = new Map(worldData.roads.map((r) => [r.wayId, r]));
@@ -202,17 +220,6 @@ sync.start();
 const maxDriving = drivingFaultLimit(route?.lengthM);
 const resultScreen = new ResultScreen(route?.line ?? [], maxDriving);
 const pauseScreen = new PauseScreen(coaching ? null : maxDriving);
-/** One per browser, kept between visits. There are no accounts. */
-const learnerId = (() => {
-  const KEY = 'dryrun.learnerId';
-  try {
-    const id = localStorage.getItem(KEY) ?? `learner-${crypto.randomUUID()}`;
-    localStorage.setItem(KEY, id);
-    return id;
-  } catch {
-    return `learner-${crypto.randomUUID()}`;
-  }
-})();
 /** The test in progress: null before the first key press, and between a reset and the next frame. */
 let session: SessionInfo | null = null;
 let ended = false;

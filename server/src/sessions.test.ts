@@ -217,3 +217,58 @@ describe('POST /api/sessions/:id/end', () => {
     expect((await end('nope')).statusCode).toBe(404);
   });
 });
+
+describe('GET /api/learners/:id/weak-junctions', () => {
+  const weak = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
+  sessionRoutes(weak, async () => db, {
+    routeSteps: (centreId, routeId) =>
+      centreId === 'wanstead' && routeId === 'demo'
+        ? [{ junctionId: 'osm-node-243757', fromRoad: 'Hermon Hill', toRoad: 'High Street', action: 'left' } as never]
+        : undefined,
+  });
+  afterAll(() => weak.close());
+
+  /** A drive on the demo route with an R7 (missed the look right) at the junction, ended as `how`. */
+  const drive = async (n: number, how: { finished?: boolean; abandoned?: boolean } | null, mode?: 'practice' | 'free', missed = ['right']) => {
+    const sessionId = `sess-${n}`;
+    await weak.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      payload: { sessionId, learnerId: 'learner-1', centreId: 'wanstead', routeId: mode === 'free' ? 'free' : 'demo', ...(mode ? { mode } : {}), startedAt },
+    });
+    const e = event(1, 'driving', { _id: `${sessionId}:1`, sessionId, ruleId: 'R7', context: { stepId: 's1', action: 'left', missed } });
+    expect((await weak.inject({ method: 'POST', url: '/api/events', payload: { events: [e] } })).statusCode).toBe(200);
+    if (how) await weak.inject({ method: 'POST', url: `/api/sessions/${sessionId}/end`, payload: { endedAt: startedAt, ...how } });
+  };
+  const get = (learner = 'learner-1') => weak.inject({ method: 'GET', url: `/api/learners/${learner}/weak-junctions?centre=wanstead` });
+
+  it('has nothing for a learner with no drives', async () => {
+    expect((await get()).json()).toEqual({ drives: 0, junctions: [] });
+  });
+
+  it("finds the junction where the same thing went wrong on two drives, counting only ended route drives", async () => {
+    await drive(1, { finished: true });
+    await drive(2, { finished: false }, 'practice');
+    await drive(3, { finished: false });
+    await drive(4, { abandoned: true }); // reset part-way: not counted
+    await drive(5, null); // still going: not counted
+    await drive(6, { finished: false }, 'free'); // no route: not counted
+    expect((await get()).json()).toEqual({
+      drives: 3,
+      junctions: [
+        { junctionId: 'osm-node-243757', name: 'Hermon Hill / High Street', what: 'missed the look right', times: 3, drives: 3, routeId: 'demo' },
+      ],
+    });
+    expect((await get('learner-2')).json()).toEqual({ drives: 0, junctions: [] });
+  });
+
+  it('counts a missed look at the same junction as one fault, whichever way was missed', async () => {
+    await drive(1, { finished: true }, undefined, ['left']);
+    await drive(2, { finished: true }, undefined, ['right']);
+    expect((await get()).json().junctions).toMatchObject([{ what: "didn't look both ways", times: 2, drives: 2 }]);
+  });
+
+  it('needs a centre', async () => {
+    expect((await weak.inject({ method: 'GET', url: '/api/learners/learner-1/weak-junctions' })).statusCode).toBe(400);
+  });
+});

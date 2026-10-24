@@ -42,6 +42,14 @@ describe('Director', () => {
     expect(d.update(0, 0)).toEqual([OPENING, 'At the lights, turn left.']);
   });
 
+  it('starting further along the route (a weak junction), gives only the directions ahead', () => {
+    const director = new Director(directions);
+    const m = directions[2].atM - 60;
+    const said = director.update(m, 0);
+    expect(said[0]).toBe(OPENING);
+    expect(said).not.toContain(directions[0].text);
+  });
+
   it("doesn't give the next direction until the car is past the last manoeuvre", () => {
     const { said } = driveAt(40);
     for (let i = 1; i < directions.length; i++) {

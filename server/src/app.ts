@@ -51,6 +51,7 @@ export function buildApp(
   const centres = opts.centres ? new Centres(opts.centres, app.log) : null;
   sessionRoutes(app, getDb, {
     routeLengthM: (centreId, routeId) => centres?.routeLengthM(centreId, routeId),
+    routeSteps: (centreId, routeId) => centres?.route(centreId, routeId)?.steps,
     faultsSaved: (events) => debriefer.faultsSaved(events),
     sessionEnded: (sessionId) => {
       debriefer.sessionEnded(sessionId);
