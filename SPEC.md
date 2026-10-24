@@ -340,6 +340,15 @@ Times are targets. Each block ends with something that runs. Commit at the end o
 
 **P0-only fallback:** skip step 2 and the P1 parts of step 5.
 
+**Which centre to demo (decided 24 Oct, after row 25):**
+
+| Use | Centre | Why |
+|---|---|---|
+| **The drive** (step 3) | **Wanstead**, route `auto-1` or the demo route | The most tested map: roundabout, lights and give-ways all work, rehearsed. Not changed by the Overture buildings |
+| **"Type your test centre"** moment | **Goodmayes** (type "Goodmayes" or IG3 9UZ) | Pre-built, so it opens at once. Fullest streets: 4,289 buildings (was 452) thanks to Overture, so it looks most like the real place. Blythswood Road (route 2) shows it best |
+| **Backup** | **Chingford** | Also pre-built (4,105 buildings). Use it if Goodmayes misbehaves |
+| **Avoid live** | any other postcode | It builds on the spot from public OSM servers (about 1–2 min, can time out), and on Railway it gets OSM buildings only, so streets look emptier. Fine to mention, risky to show |
+
 **MongoDB video:** same flow, but show Atlas UI: the stream processor running, `junction_stats` changing, the vector index, and the aggregation pipelines.
 
 ---
