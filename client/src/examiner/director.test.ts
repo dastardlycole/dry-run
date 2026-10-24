@@ -100,3 +100,12 @@ describe('Director', () => {
     expect(d.finished).toBe(false);
   });
 });
+
+describe('Director on a way back after a missed turn', () => {
+  it("doesn't say the opening again, only the directions", () => {
+    const d = new Director([{ stepId: 'r1-s1', atM: 30, endM: 30, text: 'Take the next road on the left.' }], true);
+    expect(d.update(0, 0)).toEqual(['Take the next road on the left.']);
+    d.reset();
+    expect(d.update(0, 0)).toEqual(['Take the next road on the left.']);
+  });
+});

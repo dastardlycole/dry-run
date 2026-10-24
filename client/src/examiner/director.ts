@@ -30,11 +30,17 @@ export class Director {
   private said = new Set<number>();
   private openingSaid = false;
 
-  constructor(private directions: Direction[]) {}
+  /** `opened`: the opening has been said already (directions on a new way back after a missed turn). */
+  constructor(
+    private directions: Direction[],
+    private opened = false,
+  ) {
+    this.openingSaid = opened;
+  }
 
   reset() {
     this.said.clear();
-    this.openingSaid = false;
+    this.openingSaid = this.opened;
   }
 
   /** The car was put back to `m` along the route (practice: repeat a junction): directions from there are said again. */

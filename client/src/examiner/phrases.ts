@@ -12,7 +12,12 @@ export const OPENING = "Follow the road ahead unless traffic signs direct you ot
 /** Said when the drive ends (SPEC §4.5 FR-E2), as a real examiner says it. */
 export const END_PASS = "That's the end of your test. I'm pleased to tell you that you've passed.";
 export const END_FAIL = "That's the end of your test. I'm sorry to tell you that you haven't passed.";
-/** Said when the car has left the route (off-route.ts), in any mode. */
+/**
+ * Said when the car has left the route (a missed turn, a wrong exit: off-route.ts), in any mode. Missing a
+ * turn isn't a fault, so the examiner is calm about it: a new way back is found and directions carry on.
+ */
+export const REROUTE_LINE = "That's fine. Follow the road and I'll direct you back to the route.";
+/** Said instead when there's no way back to be found (off the roads). */
 export const OFF_ROUTE_LINE = "You've gone off the route. When it's safe, turn round and follow the arrows back.";
 
 /** Said when the learner ends the test before the end of the route. */
@@ -91,5 +96,5 @@ export function everyPhrase(): string[] {
     { action: 'end' },
   ];
   const directions = steps.map((s) => phraseFor(s as RouteStep)!);
-  return [OPENING, ...directions, ...directions.map(then), END_PASS, END_FAIL, END_UNFINISHED, OFF_ROUTE_LINE, ...everyTip()];
+  return [OPENING, ...directions, ...directions.map(then), END_PASS, END_FAIL, END_UNFINISHED, REROUTE_LINE, OFF_ROUTE_LINE, ...everyTip()];
 }

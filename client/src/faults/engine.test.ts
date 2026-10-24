@@ -3,7 +3,7 @@ import demo from '../../../assets/wanstead/route-demo.json';
 import world from '../../../assets/wanstead/world.json';
 import type { Light } from '../world/lights';
 import type { Route, RouteStep, WorldData } from '../world/types';
-import { runTrace, toFaultEvent } from './engine';
+import { FaultEngine, runTrace, toFaultEvent } from './engine';
 import { speedLimitAt } from './limits';
 import { makeProjection } from '../world/projection';
 import { countFaults, resultOf } from './result';
@@ -175,6 +175,18 @@ describe('R5 no signal before turn', () => {
       offRouteM: (i + 1) * 0.37,
     }));
     expect(rules([...upTo, ...straightOn])).toEqual([]);
+  });
+
+  it("doesn't take a signal left on for the missed turn as a new one when the way back takes over", () => {
+    const engine = new FaultEngine(ctx());
+    const at = (t: number, m: number, change: Partial<Frame> = {}): Frame => ({ ...drive(route, { mph: MPH, fromM: m, toM: m })[0], t, ...change });
+    // Mirror, then signal right, then on past the turn with the signal still on.
+    const before = [at(0, 100, { mirror: true }), ...Array.from({ length: 200 }, (_, i) => at(1 + i / 30, 100 + i * 0.3, { indicator: 'right' }))];
+    expect(before.flatMap((f) => engine.step(f))).toEqual([]);
+    engine.setSteps([]);
+    // The way back starts at 0 m along it, signal still on: no R3, and no turn judged on the jump.
+    const after = Array.from({ length: 60 }, (_, i) => at(10 + i / 30, i * 0.3, { indicator: 'right' }));
+    expect(after.flatMap((f) => engine.step(f))).toEqual([]);
   });
 
   it('marks the turn once the car is on the exit road, timed at the junction', () => {

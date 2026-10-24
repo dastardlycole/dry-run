@@ -44,6 +44,18 @@ export class FaultEngine {
     });
   }
 
+  /**
+   * The route changed under the car (a new way back after a missed turn): its steps are judged from now on.
+   * Its distances start afresh, so nothing measured along the old one carries over (where the last frame was
+   * along it, lane positions, turns waiting to be confirmed). The last frame's indicator, speed and checks
+   * still count: a signal left on for the turn that was missed isn't a new signal.
+   */
+  setSteps(steps: FaultContext['steps']) {
+    this.ctx = { ...this.ctx, steps };
+    const { prev } = this.h;
+    Object.assign(this.h, { prev: prev && { ...prev, routeM: NaN }, laneSide: {}, pendingTurns: [] });
+  }
+
   step(f: Frame): Fault[] {
     const h = this.h;
     // A mirror check, look or indicator showing in this frame counts for this frame's rules.

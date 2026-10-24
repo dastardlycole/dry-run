@@ -1,9 +1,9 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 import { CENTRE } from '../config';
-import { Director } from '../examiner/director';
-import { END_FAIL, END_PASS, END_UNFINISHED, routeDirections } from '../examiner/phrases';
-import { OffRoute } from '../examiner/off-route';
+import { Director, OFF_ROUTE_M } from '../examiner/director';
+import { END_FAIL, END_PASS, END_UNFINISHED, OFF_ROUTE_LINE, REROUTE_LINE, routeDirections } from '../examiner/phrases';
+import { LastOnRoute, OffRoute } from '../examiner/off-route';
 import { PullUp } from '../examiner/pullup';
 import { tellMeFault, type TellMeAnswer } from '../examiner/tell-me';
 import { TellMe } from '../examiner/tell-me-live';
@@ -19,9 +19,12 @@ import { fetchSummaryAudio } from '../net/summary-audio';
 import { Sync } from '../net/sync';
 import { GuideArrows, LightHeads, loadRoute, routeLinesMesh } from '../world/furniture';
 import { buildSiteLights, signalSites, TrafficLights } from '../world/lights';
-import { headingOf, pointAlong } from '../world/geometry';
+import { headingOf, nearestOnPolyline, pointAlong, polylineLength } from '../world/geometry';
 import { Look } from '../world/look';
 import { RouteProgress } from '../world/progress';
+import { reroute } from '../world/reroute';
+import { RoadIndex } from '../world/route-build';
+import type { Route } from '../world/types';
 import { streetDetails } from '../world/street';
 import { greenAreas, loadScenery, placeTrees, Trees, TREE_SHAPES } from '../world/scenery';
 import { makeProjection } from '../world/projection';
@@ -116,7 +119,7 @@ const changeRoute = (e: MouseEvent) => {
 };
 document.getElementById('change-route')!.addEventListener('click', changeRoute);
 document.getElementById('change-centre')!.addEventListener('click', changeRoute);
-const [worldData, route] = await Promise.all([
+const [worldData, baseRoute] = await Promise.all([
   loadWorld(where.base).catch((err) => {
     console.error('[world] failed to load, using empty world', err);
     mapNote = 'map failed to load · ';
@@ -158,8 +161,10 @@ const lights = new TrafficLights(
 );
 const lightHeads = new LightHeads(scene, lights.sites, worldData);
 
+/** The route being driven: the one picked, or a way back to it after a missed turn (useRoute). */
+let route = baseRoute;
 let guide: GuideArrows | null = null;
-const progress = route ? new RouteProgress(route) : null;
+let progress = route ? new RouteProgress(route) : null;
 if (route) {
   scene.add(routeLinesMesh(route));
   guide = new GuideArrows(route);
@@ -198,7 +203,7 @@ let paused = false;
 // Examiner directions and the fault engine (SPEC §4.4–4.6). Both only follow the demo route.
 const voice = new Voice();
 voice.onSpeak = (text) => hud.showCaption(text);
-const director = route ? new Director(routeDirections(route)) : null;
+let director = route ? new Director(routeDirections(route)) : null;
 // From a weak junction's Practise button (?at=): start just before that junction, where J would put the car.
 const startAtM = mode === 'practice' && route ? startBeforeM(route.steps, params.get('at') ?? '') : null;
 if (startAtM !== null) {
@@ -206,7 +211,7 @@ if (startAtM !== null) {
   progress!.jumpTo(startAtM);
 }
 const edgeById = new Map(worldData.graph.edges.map((e) => [e.id, e]));
-const routeEdges = route ? route.edges.flatMap((id) => edgeById.get(id) ?? []) : [];
+let routeEdges = route ? route.edges.flatMap((id) => edgeById.get(id) ?? []) : [];
 const roadByWay = new Map(worldData.roads.map((r) => [r.wayId, r]));
 // With no route (free drive) only the rules that don't need one can mark anything: speed, mirror before
 // signalling, moving off and collisions.
@@ -218,7 +223,7 @@ const faults = new FaultEngine({
 });
 /** Free drive: the speed limit where the car is, looked up from every road twice a second, not every frame. */
 let freeLimitMph = 30;
-const pullUp = route ? new PullUp(route.lengthM) : null;
+let pullUp = route ? new PullUp(route.lengthM) : null;
 const offRoute = route ? new OffRoute() : null;
 const toLatLng = makeProjection(centre.lat, centre.lng).toLatLng;
 
@@ -226,8 +231,9 @@ const toLatLng = makeProjection(centre.lat, centre.lng).toLatLng;
 const sync = new Sync();
 sync.start();
 /** A mock test is shorter than the real 40 minutes, so the pass mark is scaled to the route (3 km allows 4). */
-const maxDriving = drivingFaultLimit(route?.lengthM);
-const resultScreen = new ResultScreen(route?.line ?? [], maxDriving);
+// Always the picked route's: a way back after a missed turn doesn't change the test (the server reads it from the route file too).
+const maxDriving = drivingFaultLimit(baseRoute?.lengthM);
+const resultScreen = new ResultScreen(baseRoute?.line ?? [], maxDriving);
 const pauseScreen = new PauseScreen(coaching ? null : maxDriving);
 /** The test in progress: null before the first key press, and between a reset and the next frame. */
 let session: SessionInfo | null = null;
@@ -252,13 +258,13 @@ function openSession() {
     sessionId: session.sessionId,
     learnerId,
     centreId: centre.id,
-    routeId: route?.id ?? 'free',
+    routeId: baseRoute?.id ?? 'free',
     ...(coaching ? { mode } : {}),
     startedAt: new Date(now).toISOString(),
   });
   if (coaching) voice.say(PRACTICE_OPENING);
   // The 'tell me' question came first; a wrong answer is this test's first fault.
-  const fault = tellMeAnswer && tellMeFault(tellMeAnswer, simTime, route?.start.pos ?? [car.mesh.position.x, car.mesh.position.z]);
+  const fault = tellMeAnswer && tellMeFault(tellMeAnswer, simTime, baseRoute?.start.pos ?? [car.mesh.position.x, car.mesh.position.z]);
   if (fault) recordFault(fault, 'before setting off');
 }
 
@@ -439,7 +445,12 @@ function onCollision(handle: number) {
  */
 function repeatJunction() {
   if (!route) return;
-  const back = repeatFromM(route.steps, progress!.m);
+  let back = repeatFromM(route.steps, progress!.m);
+  // Just after a missed turn there's no junction behind on the way back: have another go at the one missed.
+  if (back === null && route !== baseRoute && baseRoute) {
+    back = repeatFromM(baseRoute.steps, leftBaseAtM);
+    if (back !== null) useRoute(baseRoute);
+  }
   if (back === null) return;
   placeAlongRoute(back);
   progress!.jumpTo(back);
@@ -447,6 +458,8 @@ function repeatJunction() {
   faults.rewind();
   pullUp?.reset();
   offRoute?.reset();
+  lastOn.set(back);
+  wayBackRetryAt = null;
   indicator = 'off';
   contacts.clear();
   // Anything being said goes on: most likely the tip for the fault that made the learner want another go.
@@ -458,7 +471,79 @@ function placeAlongRoute(m: number) {
   const { p, dir } = pointAlong(route.line, m);
   car.setStart(p[0], p[1], headingOf(dir[0], dir[1]));
   car.reset();
-  car.setStart(route.start.pos[0], route.start.pos[1], route.start.heading);
+  car.setStart(baseRoute!.start.pos[0], baseRoute!.start.pos[1], baseRoute!.start.heading);
+}
+
+/** Where the car was along the route the last time it was on it, and how many ways back it's been given. */
+const lastOn = new LastOnRoute();
+if (startAtM !== null) lastOn.set(startAtM);
+let reroutes = 0;
+/** Where the car left the picked route (for J straight after a missed turn). */
+let leftBaseAtM = 0;
+/** No way back was found: sim time to look again (quietly), while the car is still off the route. */
+let wayBackRetryAt: number | null = null;
+const WAY_BACK_RETRY_S = 2;
+/** The stop and give-way lines on the current way back (the picked route's stay painted). */
+let wayBackLines: THREE.Mesh | null = null;
+/** Lookups over the road graph for finding a way back: built once the map is up, when the browser is idle. */
+let roadIndex: RoadIndex | null = null;
+if (route) {
+  const build = () => (roadIndex ??= new RoadIndex(worldData));
+  if ('requestIdleCallback' in window) requestIdleCallback(build, { timeout: 5000 });
+  else setTimeout(build, 1000);
+}
+
+const removeMesh = (mesh: THREE.Mesh) => {
+  scene.remove(mesh);
+  mesh.geometry.dispose();
+  (mesh.material as THREE.Material).dispose();
+};
+
+/**
+ * Drive `r` from here on, `atM` metres along it: a way back after a missed turn, or (on R) the route the
+ * test started with. The arrows, directions, lines, pull-up, speed limits and fault rules all follow it.
+ */
+function useRoute(r: Route, atM = 0) {
+  route = r;
+  progress = new RouteProgress(r);
+  progress.jumpTo(atM);
+  if (guide) removeMesh(guide.mesh);
+  const shown = guide?.mesh.visible ?? true;
+  guide = new GuideArrows(r);
+  guide.mesh.visible = shown;
+  scene.add(guide.mesh);
+  if (wayBackLines) removeMesh(wayBackLines);
+  wayBackLines = null;
+  if (r !== baseRoute) scene.add((wayBackLines = routeLinesMesh(r)));
+  director = new Director(routeDirections(r), r !== baseRoute);
+  pullUp = new PullUp(r.lengthM);
+  routeEdges = r.edges.flatMap((id) => edgeById.get(id) ?? []);
+  faults.setSteps(r.steps);
+  lastOn.set(atM);
+  wayBackRetryAt = null;
+}
+
+/**
+ * The car has left the route: a way back from where it is now. When there's none (off the roads, facing the
+ * wrong way), the examiner says to go back (`firstTry`) and it's looked for again every couple of seconds.
+ */
+function findWayBack(pos: [number, number], firstTry: boolean) {
+  if (!route) return;
+  roadIndex ??= new RoadIndex(worldData);
+  const back = reroute(roadIndex, route, pos, car.heading, lastOn.m, reroutes + 1);
+  if (!back) {
+    if (firstTry) voice.say(OFF_ROUTE_LINE);
+    wayBackRetryAt = simTime + WAY_BACK_RETRY_S;
+    return;
+  }
+  reroutes++;
+  if (route === baseRoute) leftBaseAtM = lastOn.m;
+  // The way back starts on the road the car is on: where it is along that first road.
+  const firstM = polylineLength(edgeById.get(back.edges[0])?.points ?? []);
+  const near = nearestOnPolyline(back.line, pos, 0, back.lineM.findIndex((m) => m > firstM + 20) + 1 || back.line.length);
+  useRoute(back, back.lineM[near.k] + near.t * (back.lineM[near.k + 1] - back.lineM[near.k]));
+  offRoute?.reset();
+  voice.say(REROUTE_LINE);
 }
 
 function resize() {
@@ -493,6 +578,9 @@ renderer.setAnimationLoop((now: number) => {
     }
     else if (action === 'reset') {
       car.reset();
+      if (baseRoute && route !== baseRoute) useRoute(baseRoute);
+      lastOn.set(0);
+      wayBackRetryAt = null;
       progress?.reset();
       indicator = 'off';
       faults.reset();
@@ -551,13 +639,23 @@ renderer.setAnimationLoop((now: number) => {
   lightHeads.update(simTime);
   {
     const pos: [number, number] = [car.mesh.position.x, car.mesh.position.z];
-    const m = progress?.update(pos) ?? 0;
+    let m = progress?.update(pos) ?? 0;
+    const driving = started && !tellMe.busy && !paused && !choosing && !ended;
+    if (driving && progress) {
+      const lost = offRoute!.update(simTime, progress.offM);
+      if (progress.offM <= OFF_ROUTE_M) wayBackRetryAt = null;
+      const retry = wayBackRetryAt !== null && simTime >= wayBackRetryAt;
+      if (lost || retry) {
+        const was = route;
+        findWayBack(pos, lost);
+        if (route !== was) m = progress!.update(pos);
+      }
+      lastOn.update(simTime, m, progress!.offM);
+    }
     guide?.show(m);
-    if (started && !tellMe.busy && !paused && !choosing && !ended) {
+    if (driving) {
       if (!session) openSession();
       if (director) for (const text of director.update(m, car.speedMph / MPH_PER_MS, progress!.offM)) voice.say(text);
-      const lost = offRoute?.update(simTime, progress!.offM);
-      if (lost) voice.say(lost);
       const frame: Frame = {
         t: simTime,
         pos,
@@ -598,7 +696,13 @@ renderer.setAnimationLoop((now: number) => {
 // Handy for poking at the sim from the browser console during development.
 if (import.meta.env.DEV) Object.assign(window, {
     sim: {
-      car, input, world, cameras, renderer, scene, route, lights, progress, voice, engine, time: () => simTime,
+      car, input, world, cameras, renderer, scene, lights, voice, engine, time: () => simTime,
+      get route() {
+        return route;
+      },
+      get progress() {
+        return progress;
+      },
       /** Puts the car `m` metres along the demo route, facing along it (for checking how places look). */
       goto: placeAlongRoute,
       /** Downloads the drive since the last reset as a Frame[] JSON, for use as a fault test trace. */
@@ -614,5 +718,5 @@ if (import.meta.env.DEV) Object.assign(window, {
 const status = document.querySelector('#status')!;
 fetch('/api/health')
   .then((r) => r.json())
-  .then((h) => (status.textContent = `${centre.name} · ${route?.name ?? 'free drive'} · ${mapNote}server ok · mongo ${h.mongo}`))
+  .then((h) => (status.textContent = `${centre.name} · ${baseRoute?.name ?? 'free drive'} · ${mapNote}server ok · mongo ${h.mongo}`))
   .catch(() => (status.textContent = `${centre.name} · ${mapNote}server offline`));
