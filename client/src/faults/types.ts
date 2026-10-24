@@ -5,7 +5,7 @@ import type { RouteStep, Vec2 } from '../world/types';
 // Fault engine types (SPEC §4.6). The engine only ever sees these plain values, never Three.js or
 // Rapier objects, so a recorded trace of frames always gives the same faults.
 
-export type RuleId = 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'R6' | 'R9' | 'R11';
+export type RuleId = 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'R6' | 'R9' | 'R11' | 'R15';
 export type Category = 'driving' | 'serious' | 'dangerous';
 
 export const RULE_NAMES: Record<RuleId, string> = {
@@ -17,6 +17,7 @@ export const RULE_NAMES: Record<RuleId, string> = {
   R6: 'Wrong signal',
   R9: 'Roundabout lane',
   R11: 'Collision',
+  R15: 'Tell me question',
 };
 
 /** What the car is doing at one moment. One per rendered frame. */

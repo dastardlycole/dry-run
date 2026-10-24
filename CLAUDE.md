@@ -32,7 +32,7 @@ Use the name in the first column for `/rename`. Tick off when committed. Times a
 | — | **checkpoint** | Everything above working end to end? If not, fix only that | — | Sat 18:00 |
 | 8b | `world-look` | Trailhead-style world built from open data: sky and shadows, textured roads with kerbs, brick buildings with roofs, windows and shop fronts, trees and parks (`npm run scenery -w tools`), lamps, walls, hedges, zebras, a hatchback with L plates. Google 3D Tiles were tried and dropped (blurry at street level) | ✅ done | — |
 | 9 | `hybrid-search` | Atlas Search + `$rankFusion` + `$rerank` for the debrief's guidance (learner-facing, not the instructor search), over all Highway Code rules 103–203 tagged by keyword | ✅ done (`npm run guidance-check -w tools`) | Sat 19:30 |
-| 10 | `saint-or-live` | Saint report + email (if we have a seat) **or** Gemini Live "tell me" question | Works once, start to finish | Sat 21:00 |
+| 10 | `saint-or-live` | Gemini Live "tell me" question (no Saint seat): `GET /api/live-token`, push-to-talk on T, wrong answer = R15 | Built, tests pass; voice run waits on the Gemini spending cap | Sat 21:00 |
 | — | **freeze** | Bug fixes only, rehearse the drive 3 times | — | Sat 21:00 |
 | 11 | `submission` | README, videos, notes per track | Checklist in SPEC §14 | Sun 11:30 |
 
@@ -45,5 +45,5 @@ Use the name in the first column for `/rename`. Tick off when committed. Times a
 - Run everything from the repo root: `npm run dev` (client on :5173, server on :3000), `npm run typecheck`, `npm test`.
 - Secrets live in `.env` at the root (copy from `.env.example`). Never commit it.
 - Raw downloads go in `tools/data/` (not committed). Processed files go in `/assets`.
-- The AI never decides faults. Faults come only from the code in the fault engine (SPEC §4.6).
+- The AI never decides faults. Faults come only from the code in the fault engine (SPEC §4.6). One exception, by choice: a wrong 'tell me' answer (R15) is one driving fault, as on the real test, and Gemini Live judges the answer against the official DVSA one.
 - Driving must never wait for the network. Every AI or server call runs in the background and has a fallback.

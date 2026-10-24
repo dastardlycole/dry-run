@@ -4,8 +4,11 @@ import type { RuleId } from '../../../client/src/faults/types';
 // rules that aren't tagged by hand in sources.ts, so the debrief has more to choose from. Plain keyword
 // matching, no AI: the citation checker trusts these tags, so they must come from code we can read.
 
-/** Each fault rule and what a guidance text must mention (every pattern in the list) to back it up. */
-const KEYWORDS: Record<RuleId, RegExp[]> = {
+/**
+ * Each fault rule and what a guidance text must mention (every pattern in the list) to back it up. R15 (the
+ * 'tell me' question) isn't here: only the official answers in tell-me.json back it up.
+ */
+const KEYWORDS: Partial<Record<RuleId, RegExp[]>> = {
   R1: [/speed limit|too fast|excessive speed|reduce (your )?speed|drive slowly|slow down/],
   R2: [/traffic lights?|red light|signal-controlled/, /stop line|\bred\b|\bstop\b/],
   R3: [/mirrors?/, /signal|moving off|move off|pull(ing)? out/],
@@ -22,5 +25,5 @@ const OFF_TOPIC = /overtak|headlights|sidelights|skid|single-track|country roads
 export function tagRule(text: string): RuleId[] {
   const t = text.toLowerCase();
   if (OFF_TOPIC.test(t)) return [];
-  return (Object.keys(KEYWORDS) as RuleId[]).filter((r) => KEYWORDS[r].every((p) => p.test(t)));
+  return (Object.keys(KEYWORDS) as RuleId[]).filter((r) => KEYWORDS[r]!.every((p) => p.test(t)));
 }

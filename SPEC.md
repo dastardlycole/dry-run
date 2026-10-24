@@ -116,6 +116,7 @@ Submission notes per track: §14.
 | R6 | Wrong signal | indicator ≠ turn direction | driving | P0 |
 | R9 | Roundabout lane | wrong approach lane for exit taken | driving | P0 |
 | R11 | Collision | any contact | dangerous | P0 |
+| R15 | Tell me question | wrong answer to the 'tell me' question (FR-E3), judged by Gemini Live against the official DVSA answer | driving | P1 |
 | R7 | Junction observation | no `Q` and `E` within 4 s before give-way/stop line | driving | P1 |
 | R13 | Kerb | wheel crosses kerb | driving; serious if > 10 mph | P2 |
 

@@ -6,14 +6,18 @@ import { Debriefer, type DebriefDeps } from './debrief/debriefer';
 import { debriefRoutes } from './debrief/route';
 import { SummaryVoice, summaryVoiceRoutes, type Speak } from './debrief/summary-voice';
 import { junctionStatsRoutes } from './junction-stats';
+import { liveTokenRoutes, type MintToken } from './live-token';
 import { sessionRoutes } from './sessions';
 
 /**
  * The API, given a way to reach the database (Atlas when running, an in-memory one in tests). Without
- * `debrief` (or `speak`, for the spoken summary) there's no Gemini (tests never call it by accident); index.ts
- * passes the real ones.
+ * `debrief` (or `speak`, for the spoken summary, or `mintLiveToken`, for the 'tell me' question) there's no Gemini
+ * (tests never call it by accident); index.ts passes the real ones.
  */
-export function buildApp(getDb: () => Promise<Db>, opts: { logger?: boolean; debrief?: DebriefDeps; speak?: Speak } = {}) {
+export function buildApp(
+  getDb: () => Promise<Db>,
+  opts: { logger?: boolean; debrief?: DebriefDeps; speak?: Speak; mintLiveToken?: MintToken } = {},
+) {
   const app = Fastify({
     logger: opts.logger ?? false,
     // Refuse bodies with unknown fields instead of quietly dropping them.
@@ -39,5 +43,6 @@ export function buildApp(getDb: () => Promise<Db>, opts: { logger?: boolean; deb
   junctionStatsRoutes(app, getDb);
   debriefRoutes(app, getDb, debriefer);
   summaryVoiceRoutes(app, voice);
+  liveTokenRoutes(app, opts.mintLiveToken ?? null);
   return app;
 }

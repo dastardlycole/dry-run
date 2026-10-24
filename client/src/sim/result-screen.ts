@@ -1,5 +1,6 @@
 import type { Counts, Result } from '../faults/result';
 import type { Category } from '../faults/types';
+import type { TellMeAnswer } from '../examiner/tell-me';
 import type { Vec2 } from '../world/types';
 import { DebriefView, el, type ResultFault } from './fault-list';
 
@@ -26,7 +27,8 @@ export class ResultScreen {
     return !this.root.hidden;
   }
 
-  show(result: Result, counts: Counts, faults: ResultFault[]) {
+  /** `tellMe`: how the 'tell me' question went, if it was asked (a wrong answer is also in `faults`). */
+  show(result: Result, counts: Counts, faults: ResultFault[], tellMe: TellMeAnswer | null = null) {
     const card = el('div', 'card');
     card.append(el('h1', result === 'PASS' ? 'pass' : 'fail', result === 'PASS' ? 'Pass' : 'Fail'));
 
@@ -37,6 +39,10 @@ export class ResultScreen {
       tally.append(box);
     }
     card.append(tally);
+    if (tellMe) {
+      const ok = tellMe.verdict === 'correct';
+      card.append(el('p', `tellme ${ok ? 'pass' : 'fail'}`, `‘Tell me’ question (${tellMe.question.topic}): ${ok ? 'correct' : 'not quite, 1 driving fault'}`));
+    }
 
     this.debrief = new DebriefView(faults, 'No faults. Well driven.');
     const body = el('div', 'body');

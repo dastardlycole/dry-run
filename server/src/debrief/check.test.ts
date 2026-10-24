@@ -102,5 +102,10 @@ describe('describeFault', () => {
     expect(describeFault({ ...base, category: 'dangerous', ruleId: 'R11', context: { with: 'parkedCar' } })).toBe(
       'Collision (dangerous fault): hit a parked car at 43 mph.',
     );
+    expect(
+      describeFault({ ...base, category: 'driving', ruleId: 'R15', context: { question: 'Tell me how you’d check the brake lights are working on this car.', reason: 'You missed using reflections.' } }),
+    ).toBe(
+      'Tell me question (driving fault): before setting off, didn\'t give the official answer to the \'tell me\' question "Tell me how you’d check the brake lights are working on this car." (examiner: You missed using reflections.).',
+    );
   });
 });

@@ -4,6 +4,8 @@ import { CENTRE } from '../config';
 import { Director } from '../examiner/director';
 import { END_FAIL, END_PASS, routeDirections } from '../examiner/phrases';
 import { PullUp } from '../examiner/pullup';
+import { tellMeFault, type TellMeAnswer } from '../examiner/tell-me';
+import { TellMe } from '../examiner/tell-me-live';
 import { Voice } from '../examiner/voice';
 import { FaultEngine, toFaultEvent, type SessionInfo } from '../faults/engine';
 import { speedLimitAt } from '../faults/limits';
@@ -179,6 +181,18 @@ function openSession() {
     routeId: route!.id,
     startedAt: new Date(now).toISOString(),
   });
+  // The 'tell me' question came first; a wrong answer is this test's first fault.
+  const fault = tellMeAnswer && tellMeFault(tellMeAnswer, simTime, route!.start.pos);
+  if (fault) recordFault(fault, 'before setting off');
+}
+
+/** A fault for this test: on screen, in the lists, and off to the server. */
+function recordFault(f: Fault, place: string) {
+  const event = toFaultEvent(f, ++faultCount, session!, toLatLng);
+  console.log(`[fault] ${f.ruleId} ${RULE_NAMES[f.ruleId]} (${f.category})`, event);
+  hud.flashFault(`${f.ruleId} · ${RULE_NAMES[f.ruleId]}`, f.category);
+  found.push({ id: event._id, fault: f, place });
+  sync.addFault(event);
 }
 
 /** The drive is over (pulled up, or Enter): show the result from local faults, and save it behind the scenes. */
@@ -189,7 +203,7 @@ function endDrive() {
   voice.stop();
   const counts = countFaults(found.map((f) => f.fault));
   const result = resultOf(counts);
-  resultScreen.show(result, counts, foundRows());
+  resultScreen.show(result, counts, foundRows(), tellMeAnswer);
   voice.say(result === 'PASS' ? END_PASS : END_FAIL);
   sync.endSession(session.sessionId, new Date().toISOString());
   showSaveState();
@@ -300,6 +314,16 @@ let started = false;
 const start = () => (started = true);
 window.addEventListener('keydown', start, { once: true });
 window.addEventListener('pointerdown', start, { once: true });
+/** The 'tell me' question before each test (SPEC §4.5 FR-E3). The drive starts once it's answered or skipped. */
+const tellMe = new TellMe();
+/** This test's 'tell me' answer, or null if it was skipped. */
+let tellMeAnswer: TellMeAnswer | null = null;
+tellMe.onSettled = (answer) => {
+  tellMeAnswer = answer;
+  // The test starts now: time spent on the question isn't driving time (fault times, lights, time driven).
+  simTime = 0;
+  acc = 0;
+};
 
 /** The car started touching something (not the ground). The fault engine marks it as R11. */
 function onCollision(handle: number) {
@@ -349,6 +373,8 @@ renderer.setAnimationLoop((now: number) => {
       found = [];
       contacts.clear();
       trace.length = 0;
+      tellMeAnswer = null;
+      tellMe.offer();
       // Each drive's clock (the pause screen's time driven, fault times) and the light cycle start again.
       simTime = 0;
       acc = 0;
@@ -388,7 +414,7 @@ renderer.setAnimationLoop((now: number) => {
     const pos: [number, number] = [car.mesh.position.x, car.mesh.position.z];
     const m = progress.update(pos);
     guide?.show(m);
-    if (started && !paused && !ended) {
+    if (started && !tellMe.busy && !paused && !ended) {
       if (!session) openSession();
       for (const text of director!.update(m, car.speedMph / MPH_PER_MS, progress.offM)) voice.say(text);
       const frame: Frame = {
@@ -404,13 +430,7 @@ renderer.setAnimationLoop((now: number) => {
         limitMph: speedLimitAt(pos, routeEdges),
       };
       if (import.meta.env.DEV && trace.length < MAX_TRACE_FRAMES) trace.push(frame);
-      for (const f of faults!.step(frame)) {
-        const event = toFaultEvent(f, ++faultCount, session!, toLatLng);
-        console.log(`[fault] ${f.ruleId} ${RULE_NAMES[f.ruleId]} (${f.category})`, event);
-        hud.flashFault(`${f.ruleId} · ${RULE_NAMES[f.ruleId]}`, f.category);
-        found.push({ id: event._id, fault: f, place: placeOf(f, route!.steps, worldData.roads) });
-        sync.addFault(event);
-      }
+      for (const f of faults!.step(frame)) recordFault(f, placeOf(f, route!.steps, worldData.roads));
       if (pullUp!.update(simTime, m, car.speedMph, director!.finished)) endDrive();
     }
   }

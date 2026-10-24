@@ -54,6 +54,9 @@ export function describeFault(f: DebriefFault): string {
     case 'R11':
       what = `hit ${c.with === 'parkedCar' ? 'a parked car' : c.with === 'building' ? 'a building or wall' : 'something'} at ${speed} mph`;
       break;
+    case 'R15':
+      what = `before setting off, didn't give the official answer to the 'tell me' question "${str(c.question) ?? 'about the car'}"${str(c.reason) ? ` (examiner: ${str(c.reason)})` : ''}`;
+      break;
   }
   return `${RULE_NAMES[f.ruleId]} (${f.category} fault): ${what.replace(/\s+/g, ' ')}.`;
 }

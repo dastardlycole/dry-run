@@ -26,6 +26,14 @@ const EXAMPLES: { label: string; fault: DebriefFault; junctionType?: string }[] 
   { label: 'No mirrors before turning right', fault: fault('R4', { action: 'right' }), junctionType: 'giveway' },
   { label: 'Indicated without mirrors', fault: fault('R3', { indicator: 'left' }) },
   { label: 'Hit a parked car', fault: fault('R11', { with: 'parkedCar' }, 18) },
+  {
+    label: "Didn't know how to check the brake lights",
+    fault: fault('R15', { question: 'Tell me how you’d check the brake lights are working on this car.', reason: 'You need the brake pedal plus reflections or a helper.' }, 0),
+  },
+  {
+    label: 'Wrong about tyre tread',
+    fault: fault('R15', { question: 'Tell me how you’d check the tyres to ensure that they have sufficient tread depth and that their general condition is safe to use on the road.', reason: 'The legal minimum is 1.6mm.' }, 0),
+  },
 ];
 
 const uri = process.env.MONGODB_URI;

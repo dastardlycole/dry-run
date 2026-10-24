@@ -3,6 +3,7 @@ import { buildApp } from './app';
 import { closeDb, getDb } from './db';
 import { argonAI } from './debrief/argon';
 import { hybridGuidance } from './debrief/retrieve';
+import { geminiMint } from './live-token';
 import { ensureIndexes } from './sessions';
 import { DEFAULT_VOICE, tts, wav } from './tts';
 
@@ -11,6 +12,7 @@ const app = buildApp(getDb, {
   debrief: { findGuidance: hybridGuidance(), ai: env.geminiApiKey ? argonAI(env.geminiApiKey) : null },
   // Two tries, not three: the result screen waits 12 s (SUMMARY_AUDIO_WAIT_MS) before using the browser's voice.
   speak: env.geminiApiKey ? async (text) => wav(await tts(env.geminiApiKey, text, DEFAULT_VOICE, 2)) : undefined,
+  mintLiveToken: env.geminiApiKey ? geminiMint(env.geminiApiKey) : undefined,
 });
 app.addHook('onClose', closeDb);
 

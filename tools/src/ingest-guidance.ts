@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { MongoClient, type Collection, type Document } from 'mongodb';
 import { GUIDANCE_INDEX, GUIDANCE_TEXT_INDEX } from '../../server/src/debrief/retrieve';
+import { loadTellMe } from '../../server/src/live-token';
 import { ASSETS_DIR, DATA_DIR } from './env';
 import { ruleText, sectionText } from './guidance/parse';
 import { HIGHWAY_CODE, PAGES, RULE_PAGES, SECTIONS } from './guidance/sources';
@@ -78,6 +79,18 @@ for (const s of SECTIONS) {
   const text = sectionText(html[s.page], s.from, s.toId);
   if (!text) throw new Error(`Section ${s.id} not found on ${PAGES[s.page].url}`);
   chunks.push({ _id: s.id, source: 'DVSA', url: PAGES[s.page].url, title: s.title, text, ruleIds: s.ruleIds });
+}
+// The official 'tell me' answers (written out from the gov.uk page into tell-me.json): the only guidance for R15.
+const tellMe = loadTellMe();
+for (const q of tellMe.questions) {
+  chunks.push({
+    _id: q.id,
+    source: 'DVSA',
+    url: tellMe.url,
+    title: `DVSA 'tell me' question: ${q.topic}`,
+    text: `${q.question} Official answer: ${q.answer}`,
+    ruleIds: ['R15'],
+  });
 }
 
 mkdirSync(resolve(OUT, '..'), { recursive: true });

@@ -5,6 +5,7 @@ import type { RuleId } from '../../../client/src/faults/types';
 // only searches, and the citation checker only accepts, chunks tagged with the fault's rule.
 
 const HC = 'https://www.gov.uk/guidance/the-highway-code';
+/** Every rule about the drive itself. R15, the 'tell me' question, is backed up by its own answers (tell-me.json). */
 const ALL: RuleId[] = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R9', 'R11'];
 
 export interface Page {

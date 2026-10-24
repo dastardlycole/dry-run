@@ -84,3 +84,19 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color:
 .junction-popup .type { margin-top: 0; color: #666; }
 .junction-popup ul { margin: 4px 0; padding-left: 18px; }
 .junction-popup .real { color: #a33; }
+#tellme { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); }
+#tellme .card { padding: 14px 20px; border-radius: 10px; background: rgba(27, 31, 36, 0.94); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); font-size: 15px; line-height: 1.45; }
+#tellme h2 { margin: 0 0 6px; font-size: 20px; }
+#tellme h2.pass { color: #4ad66d; }
+#tellme h2.fail { color: #ffd24a; }
+#tellme h2.live::before { content: ''; display: inline-block; width: 12px; height: 12px; margin-right: 8px; border-radius: 50%; background: #ff4a4a; animation: tellme-pulse 1s infinite; }
+@keyframes tellme-pulse { 50% { opacity: 0.3; } }
+#tellme p { margin: 6px 0 0; }
+#tellme .question { font-size: 17px; font-weight: 600; }
+#tellme .heard, #tellme .said { opacity: 0.8; font-style: italic; }
+#tellme .official { font-size: 14px; opacity: 0.85; }
+#tellme .keys { font-size: 13px; opacity: 0.7; }
+#tellme .cite { padding: 1px 8px; border-radius: 10px; background: #33404c; color: #9fd0ff; font-size: 12px; text-decoration: none; }
+#result .tellme { margin: 0 0 12px; font-size: 14px; }
+#result .tellme.pass { color: #4ad66d; }
+#result .tellme.fail { color: #ffd24a; }

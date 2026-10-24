@@ -12,6 +12,7 @@
   "dependencies": {
     "@dgreenheck/ez-tree": "^1.1.0",
     "@dimforge/rapier3d-compat": "^0.21.0",
+    "@google/genai": "^2.31.0",
     "@turf/turf": "^7.4.0",
     "graphology": "^0.26.0",
     "maplibre-gl": "^6.15.0",
