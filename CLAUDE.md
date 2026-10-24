@@ -37,7 +37,7 @@ Use the name in the first column for `/rename`. Tick off when committed. Times a
 | — | **freeze** | Bug fixes only, rehearse the drive 3 times | — | Sat 21:00 |
 | 11 | `submission` | README, videos, notes per track | Checklist in SPEC §14 | Sun 11:30 |
 
-## New features: "learn your test area" (rows 12–22, on branch `v2`, one session each, in the order listed)
+## New features: "learn your test area" (rows 12–25, on branch `v2`, one session each, in the order listed)
 
 Plan and reasons in SPEC §16. The checkpoint build is tagged `checkpoint-2`. Work on `v2`; merge into `main` (Railway deploys `main`) only when a step works end to end. Row 11 above still ships from `main`.
 
@@ -53,18 +53,14 @@ Plan and reasons in SPEC §16. The checkpoint build is tagged `checkpoint-2`. Wo
 | — | **midnight cut line** | Done by midnight 24 Oct. If `any-centre` isn't working by ~22:30, use plan B: pre-build 2–3 centres and the postcode box picks the nearest | — |
 | 17 | `practice-mode` | Instructor voice coaching in the moment, repeat a junction, free drive | ✅ done: Mock test / Practise switch on the start card (+ Free drive); in practice each fault gets a fixed spoken tip per rule (16 Gemini clips, same voice), J repeats the last junction, Enter shows "Practice drive" (never pass/fail, saved with `mode: 'practice'`). Any mode: "You've gone off the route…" after 3 s off it |
 | 18 | `weak-junctions` | Learner history from Atlas, "your weak junctions" on the start screen | ✅ done: start card shows up to 3 junctions where the same fault happened on 2+ of this browser's drives ("missed the look right, 3 of 4 times", grouped in Atlas), Practise starts a practice drive 80 m before it (`&at=`); empty box says "Drive a route…" |
-| 16 | `off-route` | "That's fine, take the next left", then reroute back (row 17 already says "you've gone off the route, turn round": `examiner/off-route.ts`) | Miss a turn → examiner recovers |
-| 19 | `junction-tips` | Local advice per tricky junction, used in coaching and the debrief | Tips appear at the right junctions |
+| — | **new order (24 Oct, ~23:00)** | Learner-journey rows are done. Next comes the wow factor judges see on camera: rows 23–25 (from the old "For later" list). After those, `road-users` / `junction-tips` only if there's time. `off-route` and `manoeuvres` are parked: rerouting barely shows on camera, and parking with WASD doesn't carry over to a real car or to your test area | — |
+| 23 | `examiner-panel` | AI examiner panel: a small box top right with the examiner's latest note (the AI explanation of the last fault, as the debrief writes it while you drive); Esc (pause screen) already shows the full explanations | Make a fault → note appears top right within seconds |
+| 24 | `dashboard-feel` | Light engine rev sounds, a speed dial (rev counter feel), the turn signal indicator moved to a better spot on screen. Check the examiner's voice stays one voice (should be fixed by the 34 fixed clips; make the browser fallback voice the same gender) | Drive: hear the engine, see the dial and indicator |
+| 25 | `overture-buildings` | Overture building outlines (OSM + AI-traced Microsoft/Google) to fill streets where OSM has no buildings; Meta tree heights | Screenshot: fuller streets at Goodmayes/Chingford |
 | 21 | `road-users` | A few cars at the roundabout and lights, pedestrians at the zebra | Faults for not giving way |
-| 20 | `manoeuvres` | Parallel park / bay park / pull up on the right, emergency stop | Each one marked by code |
-
-## For later (not scheduled)
-
-- Add an accelerometer and move the turn signal indicator to a better spot on screen.
-- The examiner's voice changes between sentences (sounds like a different person). Likely cause: sentences without cached Gemini TTS fall back to the browser voice; new routes need `npm run gen-tts -w tools`. Also make the fallback voice match (same gender).
-- Light engine rev sounds.
-- AI examiner panel: a small box top right showing the examiner's latest note; Esc (pause screen) expands it to show the full explanations.
-- Overture building outlines (OSM + AI-traced Microsoft/Google buildings) to fill streets where OSM has no buildings; also Meta tree heights. Skipped from `any-centre` for the deadline.
+| 19 | `junction-tips` | Local advice per tricky junction, used in coaching and the debrief | Tips appear at the right junctions |
+| 16 | `off-route` | Parked. "That's fine, take the next left", then reroute back (row 17 already says "you've gone off the route, turn round": `examiner/off-route.ts`) | Miss a turn → examiner recovers |
+| 20 | `manoeuvres` | Parked. Parallel park / bay park / pull up on the right, emergency stop | Each one marked by code |
 
 ## Project notes
 
