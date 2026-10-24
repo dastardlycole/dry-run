@@ -64,6 +64,7 @@ Plan and reasons in SPEC §16. The checkpoint build is tagged `checkpoint-2`. Wo
 - The examiner's voice changes between sentences (sounds like a different person). Likely cause: sentences without cached Gemini TTS fall back to the browser voice; new routes need `npm run gen-tts -w tools`. Also make the fallback voice match (same gender).
 - Light engine rev sounds.
 - AI examiner panel: a small box top right showing the examiner's latest note; Esc (pause screen) expands it to show the full explanations.
+- Overture building outlines (OSM + AI-traced Microsoft/Google buildings) to fill streets where OSM has no buildings; also Meta tree heights. Skipped from `any-centre` for the deadline.
 
 ## Project notes
 
