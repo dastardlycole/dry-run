@@ -22,6 +22,8 @@ export interface ExplainRequest {
 
 export interface SummaryRequest {
   result: Result;
+  /** A practice drive with an instructor (row 17), not a test: no result at all. */
+  practice?: boolean;
   counts: { driving: number; serious: number; dangerous: number };
   /** The most driving faults a pass allowed on this route (scaled to its length). */
   maxDrivingFaults?: number;
@@ -86,10 +88,17 @@ export function explainPrompt({ fault, place, chunks, problems }: ExplainRequest
   ].join('\n');
 }
 
-export function summaryPrompt({ result, counts, maxDrivingFaults = MAX_DRIVING_FAULTS, faults, chunks, problems }: SummaryRequest): string {
+export function summaryPrompt({ result, practice, counts, maxDrivingFaults = MAX_DRIVING_FAULTS, faults, chunks, problems }: SummaryRequest): string {
+  const tally = `${counts.driving} driving, ${counts.serious} serious, ${counts.dangerous} dangerous faults`;
   return [
-    `Result: ${result} (${counts.driving} driving, ${counts.serious} serious, ${counts.dangerous} dangerous faults; on this route a pass allows up to ${maxDrivingFaults} driving faults (the real test's 15, scaled to a shorter drive) and no serious or dangerous ones)`,
-    ...(result === 'UNFINISHED'
+    ...(practice
+      ? [
+          `This was a practice drive with an instructor, not a test (${tally}). There is no result: talk about what to work on next time, and never say they passed or failed or would have passed or failed.`,
+        ]
+      : [
+          `Result: ${result} (${tally}; on this route a pass allows up to ${maxDrivingFaults} driving faults (the real test's 15, scaled to a shorter drive) and no serious or dangerous ones)`,
+        ]),
+    ...(result === 'UNFINISHED' && !practice
       ? [
           `The learner ended the test before the end of the route, so this test has no result: talk about the faults so far and never say they passed or failed. ${
             wouldFail(counts, maxDrivingFaults)

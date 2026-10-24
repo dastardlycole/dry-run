@@ -12,6 +12,15 @@ export type { ResultFault } from './fault-list';
 // (SPEC §4.7 FR-D2–D4) fills in: mostly written already in the background during the drive, plus the
 // examiner's summary of the whole test at the top.
 
+/**
+ * The big heading: the result of a mock test, or for a practice drive (`null`) just that it was practice,
+ * as practice has no pass or fail. Its class and text.
+ */
+export function resultHeading(result: Result | null): readonly [string, string] {
+  if (!result) return ['practice', 'Practice drive'];
+  return ({ PASS: ['pass', 'Pass'], FAIL: ['fail', 'Fail'], UNFINISHED: ['unfinished', 'Test not finished'] } as const)[result];
+}
+
 const PIN: Record<Category, string> = { driving: '#ffd24a', serious: '#ff8a3d', dangerous: '#ff4a4a' };
 const MAP_PX = 280;
 
@@ -31,11 +40,14 @@ export class ResultScreen {
     return !this.root.hidden;
   }
 
-  /** `tellMe`: how the 'tell me' question went, if it was asked (a wrong answer is also in `faults`). */
-  show(result: Result, counts: Counts, faults: ResultFault[], tellMe: TellMeAnswer | null = null) {
+  /**
+   * `result` is null for a practice drive: no pass or fail, just the faults to work on.
+   * `tellMe`: how the 'tell me' question went, if it was asked (a wrong answer is also in `faults`).
+   */
+  show(result: Result | null, counts: Counts, faults: ResultFault[], tellMe: TellMeAnswer | null = null) {
     const card = el('div', 'card');
-    const heading = { PASS: ['pass', 'Pass'], FAIL: ['fail', 'Fail'], UNFINISHED: ['unfinished', 'Test not finished'] } as const;
-    card.append(el('h1', ...heading[result]));
+    card.append(el('h1', ...resultHeading(result)));
+    if (!result) card.append(el('p', 'unfinished-note', faults.length ? "Here's what to work on next time." : 'Nothing to work on this time.'));
     if (result === 'UNFINISHED') {
       const worst = counts.dangerous ? 'a dangerous fault' : counts.serious ? 'a serious fault' : 'too many driving faults';
       card.append(
@@ -52,7 +64,7 @@ export class ResultScreen {
     const tally = el('div', 'counts');
     for (const c of ['driving', 'serious', 'dangerous'] as const) {
       const box = el('div', `count ${c}`);
-      box.append(el('b', '', String(counts[c])), el('span', '', c === 'driving' ? `driving (pass: ${this.maxDriving} or fewer)` : c));
+      box.append(el('b', '', String(counts[c])), el('span', '', c === 'driving' && result ? `driving (pass: ${this.maxDriving} or fewer)` : c));
       tally.append(box);
     }
     card.append(tally);
@@ -62,6 +74,7 @@ export class ResultScreen {
     }
 
     this.debrief = new DebriefView(faults, 'No faults. Well driven.');
+    this.root.dataset.result = result ?? 'practice';
     const body = el('div', 'body');
     body.append(this.debrief.list, this.miniMap(faults));
     card.append(this.debrief.summary, body, this.debrief.note, this.save, el('p', 'keys', 'Press R to drive again'));

@@ -10,6 +10,8 @@ export interface SessionStart {
   learnerId: string;
   centreId: string;
   routeId: string;
+  /** A practice drive (on a route, or free drive with routeId 'free'); a mock test leaves it out. */
+  mode?: 'practice' | 'free';
   /** ISO time. */
   startedAt: string;
 }

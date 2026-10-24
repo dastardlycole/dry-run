@@ -3,9 +3,11 @@ import * as THREE from 'three';
 import { CENTRE } from '../config';
 import { Director } from '../examiner/director';
 import { END_FAIL, END_PASS, END_UNFINISHED, routeDirections } from '../examiner/phrases';
+import { OffRoute } from '../examiner/off-route';
 import { PullUp } from '../examiner/pullup';
 import { tellMeFault, type TellMeAnswer } from '../examiner/tell-me';
 import { TellMe } from '../examiner/tell-me-live';
+import { PRACTICE_OPENING, tipFor } from '../examiner/tips';
 import { Voice } from '../examiner/voice';
 import { FaultEngine, toFaultEvent, type SessionInfo } from '../faults/engine';
 import { speedLimitAt } from '../faults/limits';
@@ -26,7 +28,7 @@ import { addBuildingColliders, addParkedCars } from '../world/solids';
 import { setAnisotropy } from '../world/textures';
 import { buildWorld, emptyWorld, groundHalfM, loadWorld } from '../world/world';
 import { Cameras } from './camera';
-import { centreFiles, CentrePicker } from './centre-picker';
+import { centreFiles, CentrePicker, modeOf } from './centre-picker';
 import { Car, WHEELBASE_M } from './car';
 import { loadCarAsset } from '../world/car-asset';
 import { Contacts } from './contacts';
@@ -36,6 +38,7 @@ import { Input } from './input';
 import { areaOf, placeOf, roadAt } from './place';
 import type { DebriefView } from './fault-list';
 import { PauseScreen } from './pause-screen';
+import { repeatFromM } from './repeat';
 import { ResultScreen, type ResultFault } from './result-screen';
 
 // The drivable car in the OSM world around the test centre (SPEC §4.1, §4.2).
@@ -63,6 +66,12 @@ const centreId = params.get('centre')?.replace(/[^a-z0-9-]/g, '') || CENTRE.id;
 const where =
   centreId === CENTRE.id ? { base: `/${CENTRE.id}`, routes: ['demo', 'auto-1', 'auto-2', 'auto-3', 'auto-4'] } : await centreFiles(centreId);
 const routeId = params.get('route')?.replace(/[^\w-]/g, '') || where.routes[0] || 'auto-1';
+// A mock test (the default), or practice (?mode=practice): an instructor gives a tip at each fault and there's
+// no pass or fail. ?mode=free is practice with no route.
+const mode = modeOf(params.get('mode'));
+const coaching = mode !== 'test';
+if (coaching) document.getElementById('help-end')!.textContent = 'drive';
+document.getElementById('help-repeat')!.hidden = mode !== 'practice';
 // If the map can't load, keep going on plain grass so the car still drives.
 let mapNote = '';
 // Until a route is chosen, the start card asks where the learner's test is and which route to drive; the
@@ -75,8 +84,9 @@ const picker = new CentrePicker({
   routeIds: where.routes,
   routeId,
   picked: params.has('centre'),
+  mode,
 });
-if (!params.has('route')) picker.show();
+if (!params.has('route') && mode !== 'free') picker.show();
 picker.onHide = () => input.clear();
 // "Change route" (top, beside the road name) and the link in the help line open the card for this centre.
 const changeRoute = (e: MouseEvent) => {
@@ -96,7 +106,7 @@ const [worldData, route] = await Promise.all([
     return emptyWorld({ ...CENTRE, id: centreId, name: centreId });
   }),
   // Without a route the car still drives, from the nearest main road to the centre.
-  loadRoute(where.base, routeId).catch((err) => {
+  mode === 'free' ? null : loadRoute(where.base, routeId).catch((err) => {
     console.error('[route] failed to load', err);
     mapNote += 'route failed to load · ';
     return null;
@@ -167,15 +177,18 @@ const director = route ? new Director(routeDirections(route)) : null;
 const edgeById = new Map(worldData.graph.edges.map((e) => [e.id, e]));
 const routeEdges = route ? route.edges.flatMap((id) => edgeById.get(id) ?? []) : [];
 const roadByWay = new Map(worldData.roads.map((r) => [r.wayId, r]));
-const faults = route
-  ? new FaultEngine({
-      steps: route.steps,
-      lightFor: (edgeId, t) => lights.stateFor(edgeId, t),
-      junctions: worldData.junctions,
-      roadFor: (edgeId) => roadByWay.get(edgeById.get(edgeId)?.wayId ?? -1),
-    })
-  : null;
+// With no route (free drive) only the rules that don't need one can mark anything: speed, mirror before
+// signalling, moving off and collisions.
+const faults = new FaultEngine({
+  steps: route?.steps ?? [],
+  lightFor: (edgeId, t) => lights.stateFor(edgeId, t),
+  junctions: worldData.junctions,
+  roadFor: (edgeId) => roadByWay.get(edgeById.get(edgeId)?.wayId ?? -1),
+});
+/** Free drive: the speed limit where the car is, looked up from every road twice a second, not every frame. */
+let freeLimitMph = 30;
 const pullUp = route ? new PullUp(route.lengthM) : null;
+const offRoute = route ? new OffRoute() : null;
 const toLatLng = makeProjection(centre.lat, centre.lng).toLatLng;
 
 // Sessions and faults go to the server in the background (SPEC §9); the drive never waits for it.
@@ -184,7 +197,7 @@ sync.start();
 /** A mock test is shorter than the real 40 minutes, so the pass mark is scaled to the route (3 km allows 4). */
 const maxDriving = drivingFaultLimit(route?.lengthM);
 const resultScreen = new ResultScreen(route?.line ?? [], maxDriving);
-const pauseScreen = new PauseScreen(maxDriving);
+const pauseScreen = new PauseScreen(coaching ? null : maxDriving);
 /** One per browser, kept between visits. There are no accounts. */
 const learnerId = (() => {
   const KEY = 'dryrun.learnerId';
@@ -219,11 +232,13 @@ function openSession() {
     sessionId: session.sessionId,
     learnerId,
     centreId: centre.id,
-    routeId: route!.id,
+    routeId: route?.id ?? 'free',
+    ...(coaching ? { mode } : {}),
     startedAt: new Date(now).toISOString(),
   });
+  if (coaching) voice.say(PRACTICE_OPENING);
   // The 'tell me' question came first; a wrong answer is this test's first fault.
-  const fault = tellMeAnswer && tellMeFault(tellMeAnswer, simTime, route!.start.pos);
+  const fault = tellMeAnswer && tellMeFault(tellMeAnswer, simTime, route?.start.pos ?? [car.mesh.position.x, car.mesh.position.z]);
   if (fault) recordFault(fault, 'before setting off');
 }
 
@@ -232,6 +247,8 @@ function recordFault(f: Fault, place: string) {
   const event = toFaultEvent(f, ++faultCount, session!, toLatLng);
   console.log(`[fault] ${f.ruleId} ${RULE_NAMES[f.ruleId]} (${f.category})`, event);
   hud.flashFault(`${f.ruleId} · ${RULE_NAMES[f.ruleId]}`, f.category);
+  // Practice: the instructor says what to do about it straight away (a fixed tip per rule, never the AI's).
+  if (coaching) voice.sayTip(tipFor(f));
   found.push({ id: event._id, fault: f, place });
   sync.addFault(event);
 }
@@ -245,11 +262,16 @@ function endDrive() {
   ended = true;
   if (paused) setPaused(false);
   voice.stop();
-  const finished = director!.finished;
+  const finished = director?.finished ?? false;
   const counts = countFaults(found.map((f) => f.fault));
-  const result = resultOf(counts, finished, maxDriving);
-  resultScreen.show(result, counts, foundRows(), tellMeAnswer);
-  voice.say(result === 'PASS' ? END_PASS : result === 'FAIL' ? END_FAIL : END_UNFINISHED);
+  if (coaching) {
+    // Practice has no pass or fail: just the faults to work on.
+    resultScreen.show(null, counts, foundRows(), tellMeAnswer);
+  } else {
+    const result = resultOf(counts, finished, maxDriving);
+    resultScreen.show(result, counts, foundRows(), tellMeAnswer);
+    voice.say(result === 'PASS' ? END_PASS : result === 'FAIL' ? END_FAIL : END_UNFINISHED);
+  }
   sync.endSession(session.sessionId, new Date().toISOString(), finished ? 'finished' : 'unfinished');
   showSaveState();
 }
@@ -262,7 +284,8 @@ function showSaveState() {
 sync.onState = showSaveState;
 sync.onSaved = (saved) => {
   if (session?.sessionId !== saved.sessionId || !resultScreen.visible) return;
-  resultScreen.setSave(`Saved to Atlas · server result ${saved.result} · session ${saved.sessionId.slice(0, 8)}`);
+  const what = coaching ? 'practice drive' : `server result ${saved.result}`;
+  resultScreen.setSave(`Saved to Atlas · ${what} · session ${saved.sessionId.slice(0, 8)}`);
   showDebrief(saved.sessionId);
 };
 
@@ -376,6 +399,34 @@ function onCollision(handle: number) {
   hud.flashCollision();
 }
 
+/**
+ * Practice: puts the car back on the approach to the last junction it passed, to have another go. The
+ * direction for it is given again and the junction is judged again; the faults so far stay.
+ */
+function repeatJunction() {
+  if (!route) return;
+  const back = repeatFromM(route.steps, progress!.m);
+  if (back === null) return;
+  placeAlongRoute(back);
+  progress!.jumpTo(back);
+  director!.rewind(back);
+  faults.rewind();
+  pullUp?.reset();
+  offRoute?.reset();
+  indicator = 'off';
+  contacts.clear();
+  // Anything being said goes on: most likely the tip for the fault that made the learner want another go.
+}
+
+/** Puts the car `m` metres along the route, facing along it. R still goes back to the test centre. */
+function placeAlongRoute(m: number) {
+  if (!route) return;
+  const { p, dir } = pointAlong(route.line, m);
+  car.setStart(p[0], p[1], headingOf(dir[0], dir[1]));
+  car.reset();
+  car.setStart(route.start.pos[0], route.start.pos[1], route.start.heading);
+}
+
 function resize() {
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   cameras.resize(window.innerWidth, window.innerHeight);
@@ -402,13 +453,17 @@ renderer.setAnimationLoop((now: number) => {
       if (guide) guide.mesh.visible = !guide.mesh.visible;
     }
     else if (action === 'end') endDrive();
+    else if (action === 'repeat') {
+      if (mode === 'practice' && !paused && !ended) repeatJunction();
+    }
     else if (action === 'reset') {
       car.reset();
       progress?.reset();
       indicator = 'off';
-      faults?.reset();
+      faults.reset();
       director?.reset();
       pullUp?.reset();
+      offRoute?.reset();
       voice.stop();
       hud.clearFaults();
       resultScreen.hide();
@@ -458,13 +513,15 @@ renderer.setAnimationLoop((now: number) => {
   look.follow(car.mesh.position);
   trees?.update(car.mesh.position);
   lightHeads.update(simTime);
-  if (progress) {
+  {
     const pos: [number, number] = [car.mesh.position.x, car.mesh.position.z];
-    const m = progress.update(pos);
+    const m = progress?.update(pos) ?? 0;
     guide?.show(m);
     if (started && !tellMe.busy && !paused && !choosing && !ended) {
       if (!session) openSession();
-      for (const text of director!.update(m, car.speedMph / MPH_PER_MS, progress.offM)) voice.say(text);
+      if (director) for (const text of director.update(m, car.speedMph / MPH_PER_MS, progress!.offM)) voice.say(text);
+      const lost = offRoute?.update(simTime, progress!.offM);
+      if (lost) voice.say(lost);
       const frame: Frame = {
         t: simTime,
         pos,
@@ -473,14 +530,14 @@ renderer.setAnimationLoop((now: number) => {
         mirror: input.takeMirrorCheck(),
         ...input.takeLooks(),
         routeM: m,
-        offRouteM: progress.offM,
-        sideM: progress.sideM,
+        offRouteM: progress?.offM ?? 0,
+        sideM: progress?.sideM ?? 0,
         contact: contacts.take(),
-        limitMph: speedLimitAt(pos, routeEdges),
+        limitMph: route ? speedLimitAt(pos, routeEdges) : freeLimitMph,
       };
       if (import.meta.env.DEV && trace.length < MAX_TRACE_FRAMES) trace.push(frame);
-      for (const f of faults!.step(frame)) recordFault(f, placeOf(f, route!.steps, worldData.roads));
-      if (pullUp!.update(simTime, m, car.speedMph, director!.finished)) endDrive();
+      for (const f of faults.step(frame)) recordFault(f, placeOf(f, route?.steps ?? [], worldData.roads));
+      if (pullUp?.update(simTime, m, car.speedMph, director!.finished)) endDrive();
     }
   }
   cameras.update({ lookLeft: input.lookLeft, lookRight: input.lookRight, mirror: input.mirror }, dt);
@@ -488,6 +545,7 @@ renderer.setAnimationLoop((now: number) => {
     placeAt = now;
     roadName = roadAt(worldData.roads, [car.mesh.position.x, car.mesh.position.z], roadName) || roadName;
     hud.showPlace(roadName ? `${roadName} · ${area}` : area);
+    if (!route) freeLimitMph = speedLimitAt([car.mesh.position.x, car.mesh.position.z], worldData.graph.edges);
   }
   hud.update({ speedMph: car.speedMph, gear: car.gear, indicator, camera: cameras.mode, paused }, now);
   renderer.shadowMap.needsUpdate = true;
@@ -499,14 +557,7 @@ if (import.meta.env.DEV) Object.assign(window, {
     sim: {
       car, input, world, cameras, renderer, scene, route, lights, progress, voice, time: () => simTime,
       /** Puts the car `m` metres along the demo route, facing along it (for checking how places look). */
-      goto(m: number) {
-        if (!route) return;
-        const { p, dir } = pointAlong(route.line, m);
-        car.setStart(p[0], p[1], headingOf(dir[0], dir[1]));
-        car.reset();
-        // R still goes back to the test centre.
-        car.setStart(route.start.pos[0], route.start.pos[1], route.start.heading);
-      },
+      goto: placeAlongRoute,
       /** Downloads the drive since the last reset as a Frame[] JSON, for use as a fault test trace. */
       saveTrace() {
         const a = document.createElement('a');

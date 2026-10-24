@@ -33,6 +33,11 @@ export class RouteProgress {
     this.sideM = 0;
   }
 
+  /** The car was put `m` metres along the route on purpose: search around there from now on. */
+  jumpTo(m: number) {
+    this.m = m;
+  }
+
   update(p: Vec2): number {
     const { line, lineM } = this.route;
     const from = this.indexAt(this.m - BEHIND_M);

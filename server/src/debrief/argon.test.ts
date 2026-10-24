@@ -16,6 +16,13 @@ describe('summaryPrompt', () => {
     expect(ask('UNFINISHED', 1)).toContain("'this would have been a fail'");
   });
 
+  it('tells it a practice drive has no result at all', () => {
+    const prompt = summaryPrompt({ result: 'UNFINISHED', practice: true, counts: { driving: 1, serious: 1, dangerous: 0 }, faults: [], chunks: [] });
+    expect(prompt).toContain('practice drive with an instructor, not a test');
+    expect(prompt).not.toContain('Result:');
+    expect(prompt).not.toContain('would have been a fail');
+  });
+
   it('says nothing extra for a finished test', () => {
     expect(ask('PASS')).not.toContain('ended the test before');
   });

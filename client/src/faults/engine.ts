@@ -26,6 +26,24 @@ export class FaultEngine {
     this.h = newHistory();
   }
 
+  /**
+   * The car was put back along the route (practice: repeat a junction). The junction is judged again from
+   * scratch: the last frame was somewhere else, lane positions are measured afresh, and mirror checks, looks
+   * and signals from before the jump don't count for the new go. Speeding and moving off carry on as they were.
+   */
+  rewind() {
+    const fresh = newHistory();
+    Object.assign(this.h, {
+      prev: undefined,
+      laneSide: fresh.laneSide,
+      lastMirrorT: fresh.lastMirrorT,
+      lastLookT: fresh.lastLookT,
+      lastOnT: fresh.lastOnT,
+      signalFromT: fresh.signalFromT,
+      lastTurnT: fresh.lastTurnT,
+    });
+  }
+
   step(f: Frame): Fault[] {
     const h = this.h;
     // A mirror check, look or indicator showing in this frame counts for this frame's rules.

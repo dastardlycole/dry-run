@@ -14,6 +14,8 @@ export interface SessionDoc {
   routeId: string;
   /** The route's length, which sets the driving fault limit (drivingFaultLimit). Missing on old sessions: 15. */
   routeLengthM?: number;
+  /** A practice drive (row 17): saved like a test, but its result is always UNFINISHED, never a pass or fail. */
+  mode?: 'practice' | 'free';
   startedAt: Date;
   endedAt?: Date;
   /** Reset part-way (R): result UNFINISHED and no examiner's summary, as the result screen is already gone. */
@@ -36,7 +38,7 @@ const startBody = {
   type: 'object',
   required: ['sessionId', 'learnerId', 'centreId', 'routeId', 'startedAt'],
   additionalProperties: false,
-  properties: { sessionId: id, learnerId: id, centreId: id, routeId: id, startedAt: time },
+  properties: { sessionId: id, learnerId: id, centreId: id, routeId: id, mode: { enum: ['practice', 'free'] }, startedAt: time },
 };
 
 const eventSchema = {
@@ -109,17 +111,26 @@ export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>, ho
   const sessions = async () => (await getDb()).collection<SessionDoc>('sessions');
   const events = async () => (await getDb()).collection<FaultEventDoc>('fault_events');
 
-  app.post<{ Body: { sessionId: string; learnerId: string; centreId: string; routeId: string; startedAt: string } }>(
+  app.post<{ Body: { sessionId: string; learnerId: string; centreId: string; routeId: string; mode?: SessionDoc['mode']; startedAt: string } }>(
     '/api/sessions',
     { schema: { body: startBody } },
     async (req) => {
-      const { sessionId, learnerId, centreId, routeId, startedAt } = req.body;
+      const { sessionId, learnerId, centreId, routeId, mode, startedAt } = req.body;
       // Looked up here, not sent by the client: the server works the result out for itself.
       const routeLengthM = hooks.routeLengthM?.(centreId, routeId);
       // A repeat (the client retrying) changes nothing.
       await (await sessions()).updateOne(
         { _id: sessionId },
-        { $setOnInsert: { learnerId, centreId, routeId, ...(routeLengthM ? { routeLengthM } : {}), startedAt: new Date(startedAt) } },
+        {
+          $setOnInsert: {
+            learnerId,
+            centreId,
+            routeId,
+            ...(mode ? { mode } : {}),
+            ...(routeLengthM ? { routeLengthM } : {}),
+            startedAt: new Date(startedAt),
+          },
+        },
         { upsert: true },
       );
       await (await getDb())
@@ -170,7 +181,8 @@ export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>, ho
       // client, a hand-made request) is UNFINISHED, never a pass. The faults are still counted here.
       // The pass mark scales with the route's length, as the sim's does.
       const maxDrivingFaults = drivingFaultLimit(session.routeLengthM);
-      const result = resultOf(counts, req.body.finished === true && !abandoned, maxDrivingFaults);
+      // A practice drive is never a test, so never a pass or fail.
+      const result = resultOf(counts, req.body.finished === true && !abandoned && !session.mode, maxDrivingFaults);
       await col.updateOne(
         { _id: sessionId },
         { $set: { endedAt: new Date(req.body.endedAt), result, counts, maxDrivingFaults, ...(abandoned ? { abandoned } : {}) } },

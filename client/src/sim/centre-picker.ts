@@ -2,6 +2,8 @@
 // postcode; the server finds the DVSA centre and, the first time, builds its map and routes (about a
 // minute), and the page reloads on that centre. Wanstead drives behind the card meanwhile, so nothing waits.
 // Below that, the routes at the centre on screen (row 15, mock test): pick one, or "Surprise me" for a random one.
+// A switch above them picks a mock test or a practice drive (row 17), where an instructor gives a tip at each
+// fault; "Free drive" is practice with no route.
 
 import { loadRoute } from '../world/furniture';
 import { routeSummary } from '../world/route-summary';
@@ -35,6 +37,16 @@ export async function centreFiles(id: string): Promise<{ base: string; routes: s
   return { base: `/${id}`, routes: [] };
 }
 
+/** Mock test (the default), practice on a route, or practice with no route (free drive). In the link as ?mode=. */
+export type Mode = 'test' | 'practice' | 'free';
+
+export const modeOf = (param: string | null): Mode => (param === 'practice' || param === 'free' ? param : 'test');
+
+const ABOUT: Record<'test' | 'practice', string> = {
+  test: "A mock test: the examiner only gives directions, and the pass mark is scaled to the route's length.",
+  practice: 'Practice: an instructor gives you a tip the moment something needs work, and there is no pass or fail. Press J to repeat the last junction.',
+};
+
 /** The centre on screen behind the card and its routes. */
 export interface Here {
   id: string;
@@ -46,6 +58,8 @@ export interface Here {
   routeId: string;
   /** It was picked (?centre=), so its routes come first on the card. */
   picked: boolean;
+  /** The drive behind the card now. */
+  mode: Mode;
 }
 
 export class CentrePicker {
@@ -57,6 +71,8 @@ export class CentrePicker {
 
   /** Routes whose file didn't load: not offered. */
   private broken = new Set<string>();
+  /** What a route picked on the card starts: a mock test or a practice drive. */
+  private kind: 'test' | 'practice';
 
   constructor(private here: Here) {
     const find = `
@@ -73,11 +89,15 @@ export class CentrePicker {
     const routes = `
       <section class="routes">
         <h${here.picked ? 1 : 2} class="centre-name"></h${here.picked ? 1 : 2}>
-        <p>A mock test: the examiner only gives directions, and the pass mark is scaled to the route's length.</p>
+        <div class="modes" role="radiogroup" aria-label="Kind of drive">
+          <button type="button" role="radio" data-mode="test">Mock test</button>
+          <button type="button" role="radio" data-mode="practice">Practise</button>
+        </div>
+        <p class="about"></p>
         <ul></ul>
         <div class="row">
           <button type="button" class="primary surprise">Surprise me</button>
-          <button type="button" class="link">Just drive</button>
+          <button type="button" class="link free">Free drive</button>
         </div>
       </section>`;
     this.el.innerHTML = `<div class="card">${here.picked ? routes + find : find + routes}</div>`;
@@ -90,7 +110,16 @@ export class CentrePicker {
       e.preventDefault();
       this.find(this.input.value);
     });
-    this.el.querySelector('.link')!.addEventListener('click', () => this.hide());
+    this.kind = here.mode === 'test' ? 'test' : 'practice';
+    for (const b of this.el.querySelectorAll<HTMLButtonElement>('.modes button')) {
+      b.addEventListener('click', () => this.pick(b.dataset.mode as 'test' | 'practice'));
+    }
+    this.pick(this.kind);
+    // Practice with no route: coaching on whatever roads the learner likes.
+    this.el.querySelector('.free')!.addEventListener('click', () => {
+      if (here.mode === 'free') return this.hide();
+      location.search = `?centre=${encodeURIComponent(here.id)}&mode=free`;
+    });
     this.el.querySelector('.surprise')!.addEventListener('click', () => {
       const ids = here.routeIds.filter((id) => !this.broken.has(id));
       if (ids.length) this.choose(ids[Math.floor(Math.random() * ids.length)]);
@@ -104,6 +133,15 @@ export class CentrePicker {
     this.input.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') this.hide();
     });
+  }
+
+  /** Mock test or practice, for the routes below the switch. */
+  private pick(kind: 'test' | 'practice') {
+    this.kind = kind;
+    for (const b of this.el.querySelectorAll<HTMLButtonElement>('.modes button')) {
+      b.setAttribute('aria-checked', String(b.dataset.mode === kind));
+    }
+    this.el.querySelector('.about')!.textContent = ABOUT[kind];
   }
 
   /** The centre's name in the routes heading. */
@@ -155,10 +193,11 @@ export class CentrePicker {
     }
   }
 
-  /** Drive route `id`: it's already loaded if it's the one behind the card, else load the page on it. */
+  /** Drive route `id`: it's already loaded if it's the one behind the card (as the same kind of drive), else load the page on it. */
   private choose(id: string) {
-    if (id === this.here.routeId) return this.hide();
-    location.search = `?centre=${encodeURIComponent(this.here.id)}&route=${encodeURIComponent(id)}`;
+    if (id === this.here.routeId && this.kind === this.here.mode) return this.hide();
+    const mode = this.kind === 'practice' ? '&mode=practice' : '';
+    location.search = `?centre=${encodeURIComponent(this.here.id)}&route=${encodeURIComponent(id)}${mode}`;
   }
 
   private say(text: string, error = false) {
@@ -215,7 +254,8 @@ export class CentrePicker {
     }
     this.fill(1);
     this.say(`${name} is ready. Loading…`);
-    location.search = `?centre=${encodeURIComponent(id)}`;
+    // The kind of drive picked on the switch carries over to the new centre.
+    location.search = `?centre=${encodeURIComponent(id)}${this.kind === 'practice' ? '&mode=practice' : ''}`;
   }
 }
 

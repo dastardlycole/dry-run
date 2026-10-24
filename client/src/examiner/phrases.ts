@@ -1,4 +1,5 @@
 import type { Route, RouteStep } from '../world/types';
+import { everyTip } from './tips';
 
 // What the examiner says, built from the route's steps (SPEC §4.4 FR-R2). Pure: tools/src/gen-tts.ts
 // uses this too, so the cached audio always matches the words the sim asks for.
@@ -11,6 +12,9 @@ export const OPENING = "Follow the road ahead unless traffic signs direct you ot
 /** Said when the drive ends (SPEC §4.5 FR-E2), as a real examiner says it. */
 export const END_PASS = "That's the end of your test. I'm pleased to tell you that you've passed.";
 export const END_FAIL = "That's the end of your test. I'm sorry to tell you that you haven't passed.";
+/** Said when the car has left the route (off-route.ts), in any mode. */
+export const OFF_ROUTE_LINE = "You've gone off the route. When it's safe, turn round and follow the arrows back.";
+
 /** Said when the learner ends the test before the end of the route. */
 export const END_UNFINISHED = "We'll stop the test there. As we didn't finish the route, there's no result this time.";
 
@@ -77,7 +81,7 @@ const then = (text: string) => `Then ${text[0].toLowerCase()}${text.slice(1)}`;
 /** The sentences a direction is said in (a joined one is two). */
 export const sentencesOf = (text: string) => text.split(/(?<=\.) (?=Then )/);
 
-/** Every sentence the examiner can say, on any route (for pre-generating audio). */
+/** Every sentence the examiner (or, in practice, the instructor: tips.ts) can say, on any route (for pre-generating audio). */
 export function everyPhrase(): string[] {
   const steps: Partial<RouteStep>[] = [
     ...ORDINALS.map((_, i) => ({ action: 'roundabout' as const, exit: i + 1 })),
@@ -87,5 +91,5 @@ export function everyPhrase(): string[] {
     { action: 'end' },
   ];
   const directions = steps.map((s) => phraseFor(s as RouteStep)!);
-  return [OPENING, ...directions, ...directions.map(then), END_PASS, END_FAIL, END_UNFINISHED];
+  return [OPENING, ...directions, ...directions.map(then), END_PASS, END_FAIL, END_UNFINISHED, OFF_ROUTE_LINE, ...everyTip()];
 }

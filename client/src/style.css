@@ -126,6 +126,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color:
 #centre .note { min-height: 1.4em; font-size: 14px; }
 #centre .note.error { color: #ff8a8a; }
 #centre .link { padding: 0; border: 0; background: none; color: #8bb8ff; text-decoration: underline; }
+#centre .modes { display: inline-flex; margin-bottom: 10px; border: 1px solid #3a4048; border-radius: 6px; overflow: hidden; }
+#centre .modes button { padding: 7px 16px; border: 0; background: #0f1215; color: inherit; }
+#centre .modes button[aria-checked='true'] { background: #2f7de1; color: #fff; font-weight: 600; }
+#result h1.practice { color: #8bb8ff; }
 #centre .bar { height: 8px; margin-bottom: 10px; border-radius: 4px; background: #0f1215; overflow: hidden; }
 #centre .bar > div { height: 100%; width: 0; background: #2f7de1; transition: width 0.6s ease; }
 /* The 'tell me' offer waits until the start card is closed. */

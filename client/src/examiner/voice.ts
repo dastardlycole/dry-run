@@ -13,6 +13,8 @@ interface Line {
   audio?: ArrayBuffer;
   /** Shown as a caption (short directions); a long summary already on screen isn't. */
   caption: boolean;
+  /** A practice tip (sayTip): only worth saying while the car is still at the place it's about. */
+  tip?: boolean;
 }
 
 /** /audio/manifest.json: sentence → file name in /audio. */
@@ -50,6 +52,16 @@ export class Voice {
 
   say(text: string) {
     this.queue.push({ text, caption: true });
+    if (!this.busy) this.playNext();
+  }
+
+  /**
+   * A practice tip. Directions still go first (they're needed in time for the next junction), but a tip still
+   * waiting is out of date by now, so a newer one takes its place: tips never pile up and arrive late.
+   */
+  sayTip(text: string) {
+    this.queue = this.queue.filter((l) => !l.tip);
+    this.queue.push({ text, caption: true, tip: true });
     if (!this.busy) this.playNext();
   }
 

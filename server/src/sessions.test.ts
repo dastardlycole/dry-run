@@ -183,6 +183,17 @@ describe('POST /api/sessions/:id/end', () => {
     }
   });
 
+  it('saves a practice drive with its mode, and never as a pass or fail', async () => {
+    await db.dropDatabase();
+    const payload = { sessionId: 'sess-1', learnerId: 'learner-1', centreId: 'wanstead', routeId: 'demo', mode: 'practice', startedAt };
+    expect((await app.inject({ method: 'POST', url: '/api/sessions', payload })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/api/sessions', payload: { ...payload, mode: 'exam' } })).statusCode).toBe(400);
+    expect((await endWith({ finished: true })).json()).toMatchObject({ result: 'UNFINISHED' });
+    await send([event(1, 'dangerous')]);
+    expect((await endWith({ finished: true })).json()).toMatchObject({ result: 'UNFINISHED', counts: { dangerous: 1 } });
+    expect(await db.collection('sessions').findOne({ _id: 'sess-1' as never })).toMatchObject({ mode: 'practice' });
+  });
+
   it('keeps the faults of an unfinished test', async () => {
     await send([event(1, 'serious')]);
     expect((await endWith({ finished: false })).json()).toMatchObject({ result: 'UNFINISHED', counts: { driving: 0, serious: 1, dangerous: 0 } });

@@ -37,6 +37,11 @@ export class Director {
     this.openingSaid = false;
   }
 
+  /** The car was put back to `m` along the route (practice: repeat a junction): directions from there are said again. */
+  rewind(m: number) {
+    for (const i of [...this.said]) if (this.directions[i].endM >= m) this.said.delete(i);
+  }
+
   /** The last direction (on a test route, "pull up on the left") has been given. */
   get finished(): boolean {
     return this.directions.length > 0 && this.said.has(this.directions.length - 1);

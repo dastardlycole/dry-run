@@ -196,6 +196,7 @@ export class Debriefer {
     const given = new Set(chunks.keys());
     const request = {
       result: session.result,
+      ...(session.mode ? { practice: true } : {}),
       counts: session.counts,
       maxDrivingFaults: session.maxDrivingFaults,
       faults: results.map((r) => ({ fault: r.fault, place: names.get(r.fault.junctionId), explanation: r.explanation })),
