@@ -1,5 +1,9 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { Control, Edge, Junction, Road, Vec2, WorldData } from '../../../client/src/world/types';
+import type { Control, Edge, Junction, Road, Route, Vec2, WorldData } from '../../../client/src/world/types';
+import { WANSTEAD_DEMO } from '../routes/wanstead-demo';
+import { AUTO_LENGTH_M, autoRoutes, featuresOf, pathProblem } from './auto';
 import { actionFor, buildRoute, leftLaneOffset, PARK_CLEAR_M, RoadIndex, shortestPath, type RouteDef } from './build';
 
 // Tiny made-up maps. x = east, z = south (so "north" is -z).
@@ -233,4 +237,102 @@ describe('actionFor', () => {
     expect(actionFor(45)).toBe('left');
     expect(actionFor(-90)).toBe('right');
   });
+});
+
+// A small town for generated routes. High Street runs east from the start A, through lights at L, to a
+// roundabout. South Road leaves the roundabout's south side; Low Road and Back Lane lead back to High
+// Street at J, where Back Lane gives way. East Road off the roundabout is a dead end.
+//   A ---- J ---- L ---- (O) ---- e
+//          |              |
+//          D ------------ C
+const TOWN_POS: Record<string, Vec2> = {
+  W: [-300, 0], A: [0, 0], J: [300, 0], L: [600, 0],
+  RW: [900, 0], RN: [920, -20], RE: [940, 0], RS: [920, 20], e: [1300, 0],
+  C: [920, 600], D: [300, 600],
+};
+const TOWN_WAYS: WaySpec[] = [
+  { id: 1, nodes: ['W', 'A', 'J', 'L', 'RW'], name: 'High Street', highway: 'primary' },
+  { id: 2, nodes: ['RN', 'RE', 'RS', 'RW', 'RN'], roundabout: true, oneway: true, highway: 'primary' },
+  { id: 3, nodes: ['RE', 'e'], name: 'East Road', highway: 'primary' },
+  { id: 4, nodes: ['RS', 'C'], name: 'South Road', highway: 'primary' },
+  { id: 5, nodes: ['C', 'D'], name: 'Low Road' },
+  { id: 6, nodes: ['D', 'J'], name: 'Back Lane' },
+];
+function town(ways = TOWN_WAYS, lights = true): WorldData {
+  const world = makeWorld(TOWN_POS, ways);
+  world.centre.radiusM = 1500;
+  if (lights) world.junctions.push({ id: 'L', type: 'signals', pos: TOWN_POS.L, lat: 0, lng: 0, degree: 2, geometryConfidence: 'high' });
+  return world;
+}
+
+/** The checks every generated route must pass. */
+function expectTestRoute(world: WorldData, route: Route, start: string) {
+  const idx = new RoadIndex(world);
+  const edges = route.edges.map((id) => idx.edges.get(id)!);
+  expect(edges[0].from).toBe(start);
+  expect(edges[edges.length - 1].to).toBe(start);
+  edges.slice(1).forEach((e, i) => expect(e.from).toBe(edges[i].to));
+  // No U-turns, no service roads, never the same stretch the same way twice.
+  expect(pathProblem(idx, edges)).toBeNull();
+  edges.slice(1).forEach((e, i) => expect(e.to === edges[i].from && e.wayId === edges[i].wayId).toBe(false));
+  expect(route.lengthM).toBeGreaterThanOrEqual(AUTO_LENGTH_M[0] * 0.95);
+  expect(route.lengthM).toBeLessThanOrEqual(AUTO_LENGTH_M[1] * 1.05);
+}
+
+describe('generated routes', () => {
+  it('loop from the start through a roundabout, lights and a give-way, avoiding the dead end', () => {
+    const world = town();
+    const routes = autoRoutes(world);
+    expect(routes.length).toBeGreaterThanOrEqual(1);
+    for (const { def, route, has } of routes) {
+      expect(def.id).toMatch(/^auto-\d+$/);
+      expect(has).toEqual(['roundabout', 'signals', 'giveway']);
+      expect(featuresOf(route)).toEqual(has);
+      expectTestRoute(world, route, 'A');
+      expect(route.edges.some((id) => id.startsWith('3:'))).toBe(false); // East Road leads nowhere
+      expect(route.steps.find((s) => s.control === 'giveway')).toMatchObject({ junctionId: 'J', fromRoad: 'Back Lane' });
+    }
+  });
+
+  it('with no roundabout about, falls back to routes with lights and a give-way, and says so', () => {
+    const noRing: WaySpec[] = [
+      { id: 1, nodes: ['W', 'A', 'J', 'L', 'RW', 'C'], name: 'High Street', highway: 'primary' },
+      { id: 5, nodes: ['C', 'D'], name: 'Low Road' },
+      { id: 6, nodes: ['D', 'J'], name: 'Back Lane' },
+    ];
+    const world = town(noRing);
+    const routes = autoRoutes(world, { start: 'A' });
+    expect(routes.length).toBeGreaterThanOrEqual(1);
+    for (const { route, has } of routes) {
+      expect(has).toEqual(['signals', 'giveway']);
+      expectTestRoute(world, route, 'A');
+    }
+  });
+
+  it('with no lights either, still finds something to drive', () => {
+    const world = town(TOWN_WAYS, false);
+    const routes = autoRoutes(world, { start: 'A' });
+    expect(routes.length).toBeGreaterThanOrEqual(1);
+    for (const { route, has } of routes) {
+      expect(has).toContain('giveway');
+      expectTestRoute(world, route, 'A');
+    }
+  });
+
+  it('makes no routes rather than bad ones when there is no loop to drive', () => {
+    expect(autoRoutes(makeWorld(T_POS, T_WAYS), { start: 'W' })).toEqual([]);
+  });
+
+  const wanstead = resolve(__dirname, '../../../assets/wanstead/world.json');
+  it.skipIf(!existsSync(wanstead))('Wanstead gets 3+ full test routes from outside the centre', () => {
+    const world = JSON.parse(readFileSync(wanstead, 'utf8')) as WorldData;
+    const start = WANSTEAD_DEMO.waypoints[0];
+    const routes = autoRoutes(world, { start });
+    expect(routes.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(routes.map((r) => r.def.name)).size).toBe(routes.length);
+    for (const { route, has } of routes) {
+      expect(has).toEqual(['roundabout', 'signals', 'giveway']);
+      expectTestRoute(world, route, start);
+    }
+  }, 60_000);
 });
