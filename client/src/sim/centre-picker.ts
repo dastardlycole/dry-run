@@ -1,6 +1,10 @@
 // The start card (SPEC §16, row 22): "Where's your driving test?". The learner types a test centre or a
 // postcode; the server finds the DVSA centre and, the first time, builds its map and routes (about a
 // minute), and the page reloads on that centre. Wanstead drives behind the card meanwhile, so nothing waits.
+// Below that, the routes at the centre on screen (row 15, mock test): pick one, or "Surprise me" for a random one.
+
+import { loadRoute } from '../world/furniture';
+import { routeSummary } from '../world/route-summary';
 
 interface Progress {
   step: number;
@@ -31,6 +35,19 @@ export async function centreFiles(id: string): Promise<{ base: string; routes: s
   return { base: `/${id}`, routes: [] };
 }
 
+/** The centre on screen behind the card and its routes. */
+export interface Here {
+  id: string;
+  name: string;
+  /** Where its files are (see centreFiles). */
+  base: string;
+  routeIds: string[];
+  /** The route loaded now. */
+  routeId: string;
+  /** It was picked (?centre=), so its routes come first on the card. */
+  picked: boolean;
+}
+
 export class CentrePicker {
   private el = document.querySelector<HTMLDivElement>('#centre')!;
   private input: HTMLInputElement;
@@ -38,10 +55,13 @@ export class CentrePicker {
   private findButton: HTMLButtonElement;
   private bar: HTMLDivElement;
 
-  constructor(currentName: string) {
-    this.el.innerHTML = `
-      <form class="card">
-        <h1>Where's your driving test?</h1>
+  /** Routes whose file didn't load: not offered. */
+  private broken = new Set<string>();
+
+  constructor(private here: Here) {
+    const find = `
+      <form class="find">
+        <h${here.picked ? 2 : 1}>${here.picked ? 'Somewhere else?' : "Where's your driving test?"}</h${here.picked ? 2 : 1}>
         <p>Type your test centre or postcode. You'll drive real test-style routes on the roads around it.</p>
         <div class="row">
           <input name="q" autocomplete="postal-code" placeholder="e.g. Goodmayes or IG3 9UZ" maxlength="100" />
@@ -49,8 +69,18 @@ export class CentrePicker {
         </div>
         <div class="bar" hidden><div></div></div>
         <p class="note" aria-live="polite"></p>
-        <button type="button" class="link">Just drive ${escape(currentName)}</button>
       </form>`;
+    const routes = `
+      <section class="routes">
+        <h${here.picked ? 1 : 2} class="centre-name"></h${here.picked ? 1 : 2}>
+        <p>A mock test: the examiner only gives directions, and the pass mark is scaled to the route's length.</p>
+        <ul></ul>
+        <div class="row">
+          <button type="button" class="primary surprise">Surprise me</button>
+          <button type="button" class="link">Just drive</button>
+        </div>
+      </section>`;
+    this.el.innerHTML = `<div class="card">${here.picked ? routes + find : find + routes}</div>`;
     const form = this.el.querySelector('form')!;
     this.input = form.querySelector('input')!;
     this.note = form.querySelector('.note')!;
@@ -60,7 +90,15 @@ export class CentrePicker {
       e.preventDefault();
       this.find(this.input.value);
     });
-    form.querySelector('.link')!.addEventListener('click', () => this.hide());
+    this.el.querySelector('.link')!.addEventListener('click', () => this.hide());
+    this.el.querySelector('.surprise')!.addEventListener('click', () => {
+      const ids = here.routeIds.filter((id) => !this.broken.has(id));
+      if (ids.length) this.choose(ids[Math.floor(Math.random() * ids.length)]);
+    });
+    // No route list (the server didn't answer): no routes part, the drive behind the card still works.
+    (this.el.querySelector('.routes') as HTMLElement).hidden = !here.routeIds.length;
+    this.listRoutes(this.el.querySelector('ul')!);
+    this.named(here.name);
     // Typing here isn't driving: keep the keys from the game (driving, T for 'tell me', starting the test).
     for (const type of ['keydown', 'keyup', 'pointerdown'] as const) this.el.addEventListener(type, (e) => e.stopPropagation());
     this.input.addEventListener('keydown', (e) => {
@@ -68,10 +106,16 @@ export class CentrePicker {
     });
   }
 
+  /** The centre's name in the routes heading. */
+  named(name: string) {
+    this.el.querySelector('.centre-name')!.textContent = this.here.picked ? `${name}: pick a route` : `Or practise at ${name}`;
+  }
+
   show() {
     this.el.hidden = false;
     document.body.classList.add('choosing');
-    this.input.focus();
+    // With the routes first, focusing the box further down would scroll them out of sight.
+    if (!this.here.picked) this.input.focus();
   }
 
   /** Called when the card closes, e.g. to forget keys pressed while it was open. */
@@ -86,6 +130,35 @@ export class CentrePicker {
 
   get visible() {
     return !this.el.hidden;
+  }
+
+  /** One button per route, filled in as each route's file comes in (they're small). */
+  private listRoutes(list: HTMLUListElement) {
+    for (const id of this.here.routeIds) {
+      const li = document.createElement('li');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.innerHTML = `<b>${escape(id)}</b><span>…</span>`;
+      button.addEventListener('click', () => this.choose(id));
+      li.append(button);
+      list.append(li);
+      loadRoute(this.here.base, id)
+        .then((r) => {
+          button.querySelector('b')!.textContent = r.name;
+          button.querySelector('span')!.textContent = routeSummary(r);
+        })
+        .catch(() => {
+          this.broken.add(id);
+          button.disabled = true;
+          button.querySelector('span')!.textContent = 'not available';
+        });
+    }
+  }
+
+  /** Drive route `id`: it's already loaded if it's the one behind the card, else load the page on it. */
+  private choose(id: string) {
+    if (id === this.here.routeId) return this.hide();
+    location.search = `?centre=${encodeURIComponent(this.here.id)}&route=${encodeURIComponent(id)}`;
   }
 
   private say(text: string, error = false) {

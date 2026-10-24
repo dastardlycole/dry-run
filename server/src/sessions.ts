@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { MongoBulkWriteError, type Db } from 'mongodb';
-import { countFaults, resultOf, type Result } from '../../client/src/faults/result';
+import { countFaults, drivingFaultLimit, resultOf, type Result } from '../../client/src/faults/result';
 import type { FaultEvent } from '../../client/src/faults/types';
 
 // Sessions and fault events (SPEC §7, §9 API). The client makes the session id itself, so a drive that
@@ -12,12 +12,16 @@ export interface SessionDoc {
   learnerId: string;
   centreId: string;
   routeId: string;
+  /** The route's length, which sets the driving fault limit (drivingFaultLimit). Missing on old sessions: 15. */
+  routeLengthM?: number;
   startedAt: Date;
   endedAt?: Date;
   /** Reset part-way (R): result UNFINISHED and no examiner's summary, as the result screen is already gone. */
   abandoned?: boolean;
   result?: Result;
   counts?: { driving: number; serious: number; dangerous: number };
+  /** The most driving faults this test allowed, saved with the result. */
+  maxDrivingFaults?: number;
 }
 
 export type FaultEventDoc = Omit<FaultEvent, 'ts'> & { ts: Date };
@@ -97,6 +101,8 @@ export async function ensureIndexes(db: Db) {
 export interface SessionHooks {
   faultsSaved?: (events: FaultEventDoc[]) => void;
   sessionEnded?: (sessionId: string) => void;
+  /** The route's length from its file, which sets the driving fault limit. Without it, the real 15. */
+  routeLengthM?: (centreId: string, routeId: string) => number | undefined;
 }
 
 export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>, hooks: SessionHooks = {}) {
@@ -108,10 +114,12 @@ export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>, ho
     { schema: { body: startBody } },
     async (req) => {
       const { sessionId, learnerId, centreId, routeId, startedAt } = req.body;
+      // Looked up here, not sent by the client: the server works the result out for itself.
+      const routeLengthM = hooks.routeLengthM?.(centreId, routeId);
       // A repeat (the client retrying) changes nothing.
       await (await sessions()).updateOne(
         { _id: sessionId },
-        { $setOnInsert: { learnerId, centreId, routeId, startedAt: new Date(startedAt) } },
+        { $setOnInsert: { learnerId, centreId, routeId, ...(routeLengthM ? { routeLengthM } : {}), startedAt: new Date(startedAt) } },
         { upsert: true },
       );
       await (await getDb())
@@ -153,20 +161,23 @@ export function sessionRoutes(app: FastifyInstance, getDb: () => Promise<Db>, ho
     async (req, reply) => {
       const col = await sessions();
       const sessionId = req.params.id;
-      if (!(await col.findOne({ _id: sessionId }))) return reply.code(404).send({ error: 'unknown session' });
+      const session = await col.findOne({ _id: sessionId });
+      if (!session) return reply.code(404).send({ error: 'unknown session' });
       const saved = await (await events()).find({ sessionId }, { projection: { category: 1 } }).toArray();
       const counts = countFaults(saved);
       const abandoned = req.body.abandoned === true;
       // Only the sim knows if the route was driven to the end, so it has to say so: anything else (an old
       // client, a hand-made request) is UNFINISHED, never a pass. The faults are still counted here.
-      const result = resultOf(counts, req.body.finished === true && !abandoned);
+      // The pass mark scales with the route's length, as the sim's does.
+      const maxDrivingFaults = drivingFaultLimit(session.routeLengthM);
+      const result = resultOf(counts, req.body.finished === true && !abandoned, maxDrivingFaults);
       await col.updateOne(
         { _id: sessionId },
-        { $set: { endedAt: new Date(req.body.endedAt), result, counts, ...(abandoned ? { abandoned } : {}) } },
+        { $set: { endedAt: new Date(req.body.endedAt), result, counts, maxDrivingFaults, ...(abandoned ? { abandoned } : {}) } },
       );
       // No examiner's summary for a test reset part-way; one ended early still gets one.
       if (!abandoned) hooks.sessionEnded?.(sessionId);
-      return { sessionId, result, counts };
+      return { sessionId, result, counts, maxDrivingFaults };
     },
   );
 }

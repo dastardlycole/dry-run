@@ -21,7 +21,11 @@ export class ResultScreen {
   /** The faults and their debrief on screen now, or null. */
   debrief: DebriefView | null = null;
 
-  constructor(private routeLine: Vec2[]) {}
+  /** `maxDriving`: the most driving faults a pass allows on this route (drivingFaultLimit). */
+  constructor(
+    private routeLine: Vec2[],
+    private maxDriving: number,
+  ) {}
 
   get visible() {
     return !this.root.hidden;
@@ -38,7 +42,7 @@ export class ResultScreen {
         el(
           'p',
           'unfinished-note',
-          wouldFail(counts)
+          wouldFail(counts, this.maxDriving)
             ? `You'd already made ${worst}, so this would have been a fail.`
             : 'You ended the test before the end of the route.',
         ),
@@ -48,7 +52,7 @@ export class ResultScreen {
     const tally = el('div', 'counts');
     for (const c of ['driving', 'serious', 'dangerous'] as const) {
       const box = el('div', `count ${c}`);
-      box.append(el('b', '', String(counts[c])), el('span', '', c));
+      box.append(el('b', '', String(counts[c])), el('span', '', c === 'driving' ? `driving (pass: ${this.maxDriving} or fewer)` : c));
       tally.append(box);
     }
     card.append(tally);

@@ -130,9 +130,27 @@ describe('POST /api/sessions/:id/end', () => {
   it('passes with up to 15 driving faults', async () => {
     await send(Array.from({ length: 15 }, (_, i) => event(i + 1)));
     const res = (await end()).json();
-    expect(res).toEqual({ sessionId: 'sess-1', result: 'PASS', counts: { driving: 15, serious: 0, dangerous: 0 } });
+    expect(res).toEqual({ sessionId: 'sess-1', result: 'PASS', counts: { driving: 15, serious: 0, dangerous: 0 }, maxDrivingFaults: 15 });
     const s = await db.collection('sessions').findOne({ _id: 'sess-1' as never });
     expect(s).toMatchObject({ result: 'PASS', endedAt: new Date('2026-10-24T10:05:00.000Z') });
+  });
+
+  it("scales the limit to the route's length, looked up by the server: 3 km allows 4", async () => {
+    await db.dropDatabase();
+    const short = Fastify();
+    sessionRoutes(short, async () => db, { routeLengthM: (centreId, routeId) => (routeId === 'demo' ? 3000 : undefined) });
+    const post = (url: string, payload: object) => short.inject({ method: 'POST', url, payload });
+    await post('/api/sessions', { sessionId: 'sess-1', learnerId: 'learner-1', centreId: 'wanstead', routeId: 'demo', startedAt });
+    const endShort = () => post('/api/sessions/sess-1/end', { endedAt: '2026-10-24T10:05:00.000Z', finished: true });
+    await send(Array.from({ length: 4 }, (_, i) => event(i + 1)));
+    expect((await endShort()).json()).toMatchObject({ result: 'PASS', maxDrivingFaults: 4 });
+    await send([event(5)]);
+    expect((await endShort()).json()).toMatchObject({ result: 'FAIL', maxDrivingFaults: 4 });
+    expect(await db.collection('sessions').findOne({ _id: 'sess-1' as never })).toMatchObject({ routeLengthM: 3000, maxDrivingFaults: 4 });
+    // A length the client sends is dropped: only the route's own file counts.
+    await post('/api/sessions', { sessionId: 'sess-2', learnerId: 'learner-1', centreId: 'wanstead', routeId: 'demo', routeLengthM: 99_000, startedAt });
+    expect(await db.collection('sessions').findOne({ _id: 'sess-2' as never })).toMatchObject({ routeLengthM: 3000 });
+    await short.close();
   });
 
   it('fails with 16 driving faults, or one dangerous', async () => {
@@ -160,7 +178,7 @@ describe('POST /api/sessions/:id/end', () => {
   it('saves a test ended early (Enter) or reset part-way (R) as UNFINISHED, never PASS', async () => {
     // No flag at all (an old client, a hand-made request) is never taken as finished.
     for (const body of [{ finished: false }, { abandoned: true }, {}, { finished: true, abandoned: true }]) {
-      expect((await endWith(body)).json()).toEqual({ sessionId: 'sess-1', result: 'UNFINISHED', counts: { driving: 0, serious: 0, dangerous: 0 } });
+      expect((await endWith(body)).json()).toEqual({ sessionId: 'sess-1', result: 'UNFINISHED', counts: { driving: 0, serious: 0, dangerous: 0 }, maxDrivingFaults: 15 });
       expect(await db.collection('sessions').findOne({ _id: 'sess-1' as never })).toMatchObject({ result: 'UNFINISHED' });
     }
   });

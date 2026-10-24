@@ -9,7 +9,7 @@ import { TellMe } from '../examiner/tell-me-live';
 import { Voice } from '../examiner/voice';
 import { FaultEngine, toFaultEvent, type SessionInfo } from '../faults/engine';
 import { speedLimitAt } from '../faults/limits';
-import { countFaults, resultOf } from '../faults/result';
+import { countFaults, drivingFaultLimit, resultOf } from '../faults/result';
 import { RULE_NAMES, type Contact, type Fault, type Frame } from '../faults/types';
 import { streamDebrief } from '../net/debrief';
 import { fetchSummaryAudio } from '../net/summary-audio';
@@ -60,14 +60,23 @@ const events = new RAPIER.EventQueue(true);
 // picks one (route-<id>.json); default the demo at Wanstead, the first generated one elsewhere.
 const params = new URLSearchParams(location.search);
 const centreId = params.get('centre')?.replace(/[^a-z0-9-]/g, '') || CENTRE.id;
-const where = centreId === CENTRE.id ? { base: `/${CENTRE.id}`, routes: ['demo'] } : await centreFiles(centreId);
+const where =
+  centreId === CENTRE.id ? { base: `/${CENTRE.id}`, routes: ['demo', 'auto-1', 'auto-2', 'auto-3', 'auto-4'] } : await centreFiles(centreId);
 const routeId = params.get('route')?.replace(/[^\w-]/g, '') || where.routes[0] || 'auto-1';
 // If the map can't load, keep going on plain grass so the car still drives.
 let mapNote = '';
-// On the first visit, ask where the learner's test is; Wanstead drives behind the card meanwhile.
-const picker = new CentrePicker(CENTRE.name);
-// Links straight to a route (?route=auto-2) skip it.
-if (!params.has('centre') && !params.has('route')) picker.show();
+// Until a route is chosen, the start card asks where the learner's test is and which route to drive; the
+// centre's first route drives behind it meanwhile. Links straight to a route (?route=auto-2) skip it.
+const picker = new CentrePicker({
+  id: centreId,
+  // A picked centre's real name comes with its map, below.
+  name: centreId === CENTRE.id ? CENTRE.name : centreId.replace(/(^|-)([a-z])/g, (_, dash, c) => `${dash && ' '}${c.toUpperCase()}`),
+  base: where.base,
+  routeIds: where.routes,
+  routeId,
+  picked: params.has('centre'),
+});
+if (!params.has('route')) picker.show();
 picker.onHide = () => input.clear();
 const [worldData, route] = await Promise.all([
   loadWorld(where.base).catch((err) => {
@@ -84,6 +93,7 @@ const [worldData, route] = await Promise.all([
   }),
 ]);
 const centre = worldData.centre;
+if (!mapNote.startsWith('map failed')) picker.named(centre.name);
 // Roads are flat at ground level, so one ground collider carries the car everywhere (SPEC §4.1).
 const groundHalf = groundHalfM(centre.radiusM);
 const groundCollider = world.createCollider(
@@ -156,8 +166,10 @@ const toLatLng = makeProjection(centre.lat, centre.lng).toLatLng;
 // Sessions and faults go to the server in the background (SPEC §9); the drive never waits for it.
 const sync = new Sync();
 sync.start();
-const resultScreen = new ResultScreen(route?.line ?? []);
-const pauseScreen = new PauseScreen();
+/** A mock test is shorter than the real 40 minutes, so the pass mark is scaled to the route (3 km allows 4). */
+const maxDriving = drivingFaultLimit(route?.lengthM);
+const resultScreen = new ResultScreen(route?.line ?? [], maxDriving);
+const pauseScreen = new PauseScreen(maxDriving);
 /** One per browser, kept between visits. There are no accounts. */
 const learnerId = (() => {
   const KEY = 'dryrun.learnerId';
@@ -220,7 +232,7 @@ function endDrive() {
   voice.stop();
   const finished = director!.finished;
   const counts = countFaults(found.map((f) => f.fault));
-  const result = resultOf(counts, finished);
+  const result = resultOf(counts, finished, maxDriving);
   resultScreen.show(result, counts, foundRows(), tellMeAnswer);
   voice.say(result === 'PASS' ? END_PASS : result === 'FAIL' ? END_FAIL : END_UNFINISHED);
   sync.endSession(session.sessionId, new Date().toISOString(), finished ? 'finished' : 'unfinished');

@@ -197,6 +197,7 @@ export class Debriefer {
     const request = {
       result: session.result,
       counts: session.counts,
+      maxDrivingFaults: session.maxDrivingFaults,
       faults: results.map((r) => ({ fault: r.fault, place: names.get(r.fault.junctionId), explanation: r.explanation })),
       chunks: [...chunks.values()],
     };

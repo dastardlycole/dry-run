@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import route from '../../../assets/wanstead/route-demo.json';
 import { CENTRE } from '../../../client/src/config';
-import { countFaults, resultOf } from '../../../client/src/faults/result';
+import { countFaults, drivingFaultLimit, resultOf } from '../../../client/src/faults/result';
 import { makeProjection } from '../../../client/src/world/projection';
 import type { Route } from '../../../client/src/world/types';
 import { RULE_IDS } from '../../../server/src/sessions';
@@ -54,7 +54,7 @@ describe('seed-demo data', () => {
     for (const s of seed.sessions) {
       const counts = countFaults(seed.events.filter((e) => e.sessionId === s._id));
       expect(s.counts).toEqual(counts);
-      expect(s.result).toBe(resultOf(counts));
+      expect(s.result).toBe(resultOf(counts, true, drivingFaultLimit(s.routeLengthM)));
     }
   });
 

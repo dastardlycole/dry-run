@@ -10,6 +10,9 @@ export class PauseScreen {
   /** The faults and their debrief on screen now, or null. */
   debrief: DebriefView | null = null;
 
+  /** `maxDriving`: the most driving faults a pass allows on this route (drivingFaultLimit). */
+  constructor(private maxDriving: number) {}
+
   show(simTime: number, counts: Counts, faults: ResultFault[]) {
     const card = el('div', 'card');
 
@@ -19,10 +22,10 @@ export class PauseScreen {
     stats.append(time);
     for (const c of ['driving', 'serious', 'dangerous'] as const) {
       const box = el('div', `stat count ${c}`);
-      box.append(el('b', '', String(counts[c])), el('span', '', c));
+      box.append(el('b', '', c === 'driving' ? `${counts[c]} / ${this.maxDriving}` : String(counts[c])), el('span', '', c));
       stats.append(box);
     }
-    const passing = !wouldFail(counts);
+    const passing = !wouldFail(counts, this.maxDriving);
     const course = el('div', `stat course ${passing ? 'pass' : 'fail'}`);
     course.append(el('b', '', passing ? 'On course' : 'Fail'), el('span', '', passing ? 'to pass' : 'if this were the test'));
     stats.append(course);
