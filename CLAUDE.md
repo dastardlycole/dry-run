@@ -31,7 +31,7 @@ Use the name in the first column for `/rename`. Tick off when committed. Times a
 | 8 | `tts-demo-mode` | Spoken result (TTS pipeline already built in row 4: `npm run gen-tts -w tools`), demo seed data, `R` reset | ✅ done | Sat 18:00 |
 | — | **checkpoint** | Everything above working end to end? If not, fix only that | — | Sat 18:00 |
 | 8b | `world-look` | Trailhead-style world built from open data: sky and shadows, textured roads with kerbs, brick buildings with roofs, windows and shop fronts, trees and parks (`npm run scenery -w tools`), lamps, walls, hedges, zebras, a hatchback with L plates. Google 3D Tiles were tried and dropped (blurry at street level) | ✅ done | — |
-| 9 | `hybrid-search` | Atlas Search + `$rankFusion` + `$rerank` instructor search | Test queries return sensible junctions | Sat 19:30 |
+| 9 | `hybrid-search` | Atlas Search + `$rankFusion` + `$rerank` for the debrief's guidance (learner-facing, not the instructor search), over all Highway Code rules 103–203 tagged by keyword | ✅ done (`npm run guidance-check -w tools`) | Sat 19:30 |
 | 10 | `saint-or-live` | Saint report + email (if we have a seat) **or** Gemini Live "tell me" question | Works once, start to finish | Sat 21:00 |
 | — | **freeze** | Bug fixes only, rehearse the drive 3 times | — | Sat 21:00 |
 | 11 | `submission` | README, videos, notes per track | Checklist in SPEC §14 | Sun 11:30 |

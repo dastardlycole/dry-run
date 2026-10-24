@@ -133,7 +133,7 @@ Submission notes per track: §14.
 ### 4.8 Instructor dashboard (`/instructor`)
 - **[P0]** FR-I1. MapLibre map: fault heatmap per junction (filter by rule/category) + STATS19 collision layer.
 - **[P0]** FR-I2. New faults appear within ~10 s (reads `junction_stats` written by Stream Processing).
-- **[P1]** FR-I3. Plain-English search ("roundabouts where learners miss mirror checks") via `$rankFusion` (vector + Atlas Search) + `$rerank`.
+- **[P1]** FR-I3. Plain-English search ("roundabouts where learners miss mirror checks") via `$rankFusion` (vector + Atlas Search) + `$rerank`. **Dropped:** hybrid search + rerank feed the debrief's guidance instead (FR-D2).
 - **[P1]** FR-I4. Saint action log with approval status.
 - **[P2]** FR-I5. Learner list with pass/fail trend.
 
@@ -213,7 +213,7 @@ Verify at kickoff: exact Gemini model names available on our credits (event list
 | **Vector Search** | P0 | `$vectorSearch` for debrief RAG, filtered by `ruleIds` |
 | Geospatial | P0 | `$geoNear` for fault → junction and collision → junction; heatmap queries |
 | **Atlas Search** | P1 | Exact terms ("Rule 186", "mini-roundabout") |
-| **Hybrid Search** | P1 | `$rankFusion` of `$vectorSearch` + `$search` for instructor search |
+| **Hybrid Search** | P1 | `$rankFusion` of `$vectorSearch` + `$search` to find the debrief's guidance |
 | **Voyage rerank** | P1 | `$rerank` after hybrid search |
 
 ---
@@ -250,7 +250,7 @@ Browser (Vite + Three.js + Rapier)
 
 Backend (Node + Fastify)
  ├─ sessions, events, debrief, stats, search, reports, live-token, saint log
- ├─ RAG: $vectorSearch (autoEmbed) [→ $rankFusion + $rerank P1] → gemini-4-argon → citation validator
+ ├─ RAG: $rankFusion($vectorSearch autoEmbed + $search) → $rerank → gemini-4-argon → citation validator
  └─ [P1] Report HTML → email to Saint inbox
 
 MongoDB Atlas

@@ -7,13 +7,13 @@ import type { DebriefFault } from './describe';
 import type { FindGuidance } from './retrieve';
 
 // Writes the debrief in the background while the learner drives (SPEC §4.7 FR-D2–D5). Each fault is explained
-// as soon as it's saved: vector search for guidance → Argon → citation checker → (once more with the checker's
+// as soon as it's saved: hybrid search for guidance → Argon → citation checker → (once more with the checker's
 // reasons) → kept, or dropped. Results go in fault_explanations, so the pause screen and the result screen
 // only read what's ready. When the test ends, Argon also writes a short summary of the whole test, and the
 // finished debrief is saved on the session (SPEC §7).
 
 export interface DebriefDeps {
-  findGuidance: (db: Db) => FindGuidance;
+  findGuidance: (db: Db, log: FastifyBaseLogger) => FindGuidance;
   /** null when there's no Gemini key: nothing is written in the background, and the debrief says so. */
   ai: DebriefAI | null;
 }
@@ -138,14 +138,14 @@ export class Debriefer {
 
   private async write(db: Db, f: FaultDoc): Promise<FaultResult> {
     const ai = this.deps.ai!;
-    const found = await this.deps.findGuidance(db)(f);
+    const junction = await db
+      .collection<{ _id: string; name: string; type?: string }>('junctions')
+      .findOne({ _id: f.junctionId }, { projection: { name: 1, type: 1 } });
+    const found = await this.deps.findGuidance(db, this.log)(f, junction?.type);
     if (!found.length) {
       this.log.warn({ faultId: f._id, ruleId: f.ruleId }, 'debrief: no guidance found');
       return { fault: f, explanation: null, error: true };
     }
-    const junction = await db
-      .collection<{ _id: string; name: string }>('junctions')
-      .findOne({ _id: f.junctionId }, { projection: { name: 1 } });
     // `f` was loaded from its own session's fault_events, so it is in the test by construction.
     const faultIds = new Set([f._id]);
     const given = new Set(found.map((c) => c._id));

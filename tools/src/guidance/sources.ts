@@ -19,6 +19,12 @@ export const PAGES = {
   marking: { file: 'dvsa-faults.html', url: 'https://www.gov.uk/driving-test/driving-test-faults-result' },
 } satisfies Record<string, Page>;
 
+/** The Highway Code rules each page holds: all of them go in, tagged by hand (below) or by their words (tags.ts). */
+export const RULE_PAGES: [page: keyof typeof PAGES, first: number, last: number][] = [
+  ['general', 103, 158],
+  ['road', 159, 203],
+];
+
 export interface RuleSource {
   page: keyof typeof PAGES;
   rule: number;
