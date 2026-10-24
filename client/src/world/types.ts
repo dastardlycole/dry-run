@@ -31,6 +31,8 @@ export interface Building {
   levels?: number;
   /** Tagged as a shop, café, pub and so on: drawn with a shop front. */
   shop?: boolean;
+  /** An Overture outline (AI-traced from aerial photos) filling a gap in OSM, not an OSM building. */
+  from?: 'overture';
 }
 
 export interface Junction {

@@ -1,8 +1,10 @@
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { WorldData } from '../../../client/src/world/types';
+import { DATA_DIR } from '../env';
 import { importWorld, worldSummary } from '../osm/import';
 import { overpass, roadsQuery, sceneryQuery, type Centre } from '../osm/overpass';
+import { addOvertureBuildings, fetchOverture } from '../osm/overture';
 import { autoRoutes } from '../route/auto';
 import { buildScenery, scenerySummary } from '../scenery/build';
 import type { CentreInfo } from './finder';
@@ -15,7 +17,10 @@ import type { CentreInfo } from './finder';
 export const CENTRE_RADIUS_M = 1000;
 
 /** The stages of a build, for the loading bar (centre-build prints "@@step <n>/<of> <label>"). */
-export const STAGES = ['Downloading the roads', 'Downloading parks and trees', 'Building the streets', 'Planning test routes'] as const;
+export const STAGES = ['Downloading the roads', 'Downloading parks and trees', 'Adding more buildings', 'Building the streets', 'Planning test routes'] as const;
+/** Overture's download takes ~6 s; past this it's stuck, and the map is fine with OSM buildings only. */
+const OVERTURE_LIMIT_MS = 30_000;
+
 export const stepLine = (i: number) => `@@step ${i + 1}/${STAGES.length} ${STAGES[i]}`;
 
 // The address goes into world.json for the place line at the top of the screen ("… · Goodmayes, Ilford").
@@ -39,10 +44,14 @@ export async function buildCentre(info: CentreInfo, outDir: string, log: (line: 
 
   log(stepLine(2));
   const world: WorldData = importWorld(roadsRaw, centre);
+  const overture = await fetchOverture(centre, resolve(DATA_DIR, 'overture', `${centre.id}.geojson`), OVERTURE_LIMIT_MS, log);
+  if (overture) log(`Overture: +${addOvertureBuildings(world, overture)} buildings OSM doesn't have`);
+
+  log(stepLine(3));
   log(worldSummary(world));
   const scenery = buildScenery(sceneryRaw, roadsRaw, centre);
   log(scenerySummary(scenery));
-  log(stepLine(3));
+  log(stepLine(4));
   const autos = autoRoutes(world);
   if (!autos.length) throw new Error(`no test route could be made around ${centre.name}`);
 

@@ -8,6 +8,7 @@
     "osm-fetch": "tsx src/osm-fetch.ts",
     "osm-import": "tsx src/osm-import.ts",
     "scenery": "tsx src/scenery.ts",
+    "overture": "tsx src/overture.ts",
     "route-build": "tsx src/route-build.ts",
     "centre-list": "tsx src/centre-list.ts",
     "centre-build": "tsx src/centre-build.ts",

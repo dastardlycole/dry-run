@@ -128,8 +128,9 @@ export function worldSummary(world: WorldData): string {
   const byType: Record<string, number> = {};
   for (const j of world.junctions) byType[j.type] = (byType[j.type] ?? 0) + 1;
   const lowConf = world.junctions.filter((j) => j.geometryConfidence === 'low').length;
+  const overture = world.buildings.filter((b) => b.from === 'overture').length;
   return (
-    `roads ${world.roads.length} · buildings ${world.buildings.length} · graph ${world.graph.nodes.length} nodes / ${world.graph.edges.length} edges\n` +
+    `roads ${world.roads.length} · buildings ${world.buildings.length}${overture ? ` (${overture} from Overture)` : ''} · graph ${world.graph.nodes.length} nodes / ${world.graph.edges.length} edges\n` +
     `junctions ${world.junctions.length} (${JSON.stringify(byType)}) · low confidence ${lowConf} · controls ${world.controls.length}`
   );
 }
