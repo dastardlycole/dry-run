@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { audioOf, wav } from './tts';
+import { audioOf, wav, prompt, NOTES_UP_TO_WORDS } from './tts';
 
 // Gemini TTS replies: bare PCM, or a whole WAV with a provenance block after the audio (heard as a scratch).
 
@@ -28,5 +28,16 @@ describe('audioOf', () => {
     const fmt = wav({ pcm, rate: 24000 }).subarray(12, 36);
     const file = Buffer.concat([Buffer.from('RIFF\0\0\0\0WAVE', 'latin1'), chunk('LIST', Buffer.from('abc')), fmt, chunk('data', pcm)]);
     expect([...audioOf(file).pcm]).toEqual([...pcm]);
+  });
+});
+
+describe('prompt', () => {
+  it("gives a short sentence the director's notes", () => {
+    expect(prompt('At the roundabout, take the first exit.')).toContain("DIRECTOR'S NOTES");
+  });
+
+  it('sends a long text like the summary on its own, so the notes are never read out with it', () => {
+    const summary = Array.from({ length: NOTES_UP_TO_WORDS + 1 }, () => 'word').join(' ');
+    expect(prompt(summary)).toBe(summary);
   });
 });

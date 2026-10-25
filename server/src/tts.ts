@@ -6,8 +6,14 @@ export const DEFAULT_VOICE = 'Charon';
 export const TIMEOUT_MS = 30_000;
 // In this layout the model takes the notes as direction and only speaks the transcript. A plain
 // "Say this calmly: …" prefix gets read out loud.
-const prompt = (text: string) =>
-  `### DIRECTOR'S NOTES
+// Now and then it reads the notes out anyway. For a short sentence that's caught (the clip comes back far too
+// long, see tts()), but in a long text like the end-of-test summary the extra seconds hide in the slack, so
+// long texts go without notes: the voice itself (Charon) is set in the request either way.
+export const NOTES_UP_TO_WORDS = 18;
+export const prompt = (text: string) =>
+  text.split(/\s+/).length > NOTES_UP_TO_WORDS
+    ? text
+    : `### DIRECTOR'S NOTES
 Style: calm, clear, friendly UK driving examiner. Accent: neutral southern British (RP). Pace: unhurried.
 
 ### TRANSCRIPT
