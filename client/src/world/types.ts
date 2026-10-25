@@ -82,6 +82,16 @@ export interface WorldData {
   junctions: Junction[];
   controls: Control[];
   graph: { nodes: GraphNode[]; edges: Edge[] };
+  /** A named place to show off (the hackathon venue: tools/src/landmark.ts): a sign on its front, and free drive starts in view of it. */
+  landmark?: Landmark;
+}
+
+export interface Landmark {
+  name: string;
+  /** The sign's middle, on the building's front wall, facing `facing` (rotation about +Y, 0 = facing south, +z). */
+  sign: { pos: Vec2; y: number; facing: number; widthM: number };
+  /** Where free drive starts: on the road, with the building ahead on the left. */
+  start: Pose;
 }
 
 /** A position and the direction faced: rotation about +Y, 0 = east (+x), positive = turned left. */

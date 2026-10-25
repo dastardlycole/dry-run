@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { dashPieces, discTriangles, offsetPolyline, stripTriangles, stripUVs, type Circle } from './geometry';
 import { areaOf, buildingsGroup, isShop } from './buildings';
 import { surface } from './textures';
-import type { Road, Vec2, WorldData } from './types';
+import type { Landmark, Road, Vec2, WorldData } from './types';
 
 // Builds the 3D world from assets/<centre>/world.json (SPEC §4.1): grass, pavements, roads,
 // lane markings and buildings, each merged into one mesh.
@@ -125,8 +125,66 @@ export function buildWorld(data: WorldData, scene: THREE.Scene): StartPose {
   group.add(flatMesh(marks, COLOURS.marking, LAYER.marking));
   group.add(kerbMesh(kerbs));
   group.add(buildingsGroup(data.buildings));
+  if (data.landmark) group.add(landmarkSigns(data.landmark));
 
-  return startPose(data.roads);
+  const start = data.landmark?.start;
+  return start ? { x: start.pos[0], z: start.pos[1], heading: start.heading } : startPose(data.roads);
+}
+
+const FASCIA_H = 0.9;
+/** The projecting sign: sticks out from the wall over the pavement, so drivers coming up the street can read it. */
+const BLADE = { w: 1.8, h: 0.75, y: 4.6 };
+
+/** The landmark's name, white on dark, sized for a board `w` × `h` metres. */
+function signTexture(name: string, w: number, h: number): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = Math.round((1024 * h) / w);
+  const g = canvas.getContext('2d')!;
+  g.fillStyle = '#111317';
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  g.fillStyle = '#ffffff';
+  g.font = `bold ${Math.round(canvas.height * 0.62)}px "Helvetica Neue", Arial, sans-serif`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(name.toUpperCase(), canvas.width / 2, canvas.height / 2, canvas.width * 0.9);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  return texture;
+}
+
+/** A board with the name on its front (+z) and, if `bothSides`, its back. */
+function signBoard(name: string, w: number, h: number, bothSides: boolean): THREE.Mesh {
+  const face = new THREE.MeshStandardMaterial({ map: signTexture(name, w, h), roughness: 0.5 });
+  const edge = new THREE.MeshStandardMaterial({ color: 0x111317, roughness: 0.5 });
+  // Box faces: +x, -x, +y, -y, +z, -z.
+  const board = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.12), [edge, edge, edge, edge, face, bothSides ? face : edge]);
+  board.castShadow = true;
+  return board;
+}
+
+/**
+ * The landmark's signs: a fascia flat on its front wall, and a projecting sign at the end of the front nearer
+ * where the drive starts, readable on both sides as you drive along the street.
+ */
+function landmarkSigns({ name, sign, start }: Landmark): THREE.Group {
+  const group = new THREE.Group();
+  const fascia = signBoard(name, sign.widthM, FASCIA_H, false);
+  fascia.position.set(sign.pos[0], sign.y, sign.pos[1]);
+  fascia.rotation.y = sign.facing;
+  group.add(fascia);
+
+  const out: Vec2 = [Math.sin(sign.facing), Math.cos(sign.facing)];
+  let along: Vec2 = [out[1], -out[0]];
+  if ((start.pos[0] - sign.pos[0]) * along[0] + (start.pos[1] - sign.pos[1]) * along[1] < 0) along = [-along[0], -along[1]];
+  const end = sign.widthM / 2 - 0.3;
+  const reach = BLADE.w / 2 + 0.1;
+  const blade = signBoard(name, BLADE.w, BLADE.h, true);
+  blade.position.set(sign.pos[0] + along[0] * end + out[0] * reach, BLADE.y, sign.pos[1] + along[1] * end + out[1] * reach);
+  blade.rotation.y = sign.facing + Math.PI / 2;
+  group.add(blade);
+  return group;
 }
 
 export function hasPavement(r: Road) {

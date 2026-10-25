@@ -29,7 +29,7 @@ export const toCentre = (c: CentreInfo): Centre => ({
   name: c.name,
   lat: c.lat,
   lng: c.lng,
-  radiusM: CENTRE_RADIUS_M,
+  radiusM: c.radiusM ?? CENTRE_RADIUS_M,
   address: c.address,
   postcode: c.postcode,
 });

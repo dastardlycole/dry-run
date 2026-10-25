@@ -8,6 +8,8 @@ export interface CentreInfo {
   postcode: string;
   lat: number;
   lng: number;
+  /** How far around it to build; the default (CENTRE_RADIUS_M) fits a test route. Smaller for a showcase area. */
+  radiusM?: number;
 }
 
 const FINDER_URL = 'https://www.gov.uk/find-driving-test-centre';
