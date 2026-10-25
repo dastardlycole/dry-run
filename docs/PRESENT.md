@@ -1,5 +1,10 @@
 # Dry Run: presentation cheat sheet
 
+## Pitch
+**30 seconds:** "Under half of UK learner drivers pass their test, and most take it on roads they've never driven. Dry Run fixes that. Type your test centre, and it rebuilds the real streets around it in 3D, with test-style routes. An AI examiner speaks to you, asks the 'tell me' question by voice, and marks you exactly like the real test sheet, using rules in code, never AI guesses. Every mistake is explained from the Highway Code and remembered, so you know exactly what to practise. It's live now."
+
+**10 seconds:** "Dry Run lets you practise your real driving test on the real roads around your test centre, with an AI examiner that marks you like the real thing."
+
 ## Kit
 - [ ] Friend's laptop (not mine), charger plugged in
 - [ ] Chrome open: live site + Encode Hub tab + deck PDF
